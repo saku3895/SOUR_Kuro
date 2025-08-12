@@ -4,5 +4,8 @@ class PeriodicModuleTest1(PeriodicModule):
     def __init__(self, interval_ms=1000):
         super().__init__(interval_ms)
 
-    def execute_periodic_task(self):
-        print("PeriodicModuleTest1")
+    def execute_periodic_task(self, counter):
+        counter.value += 1
+
+        print("PeriodicModuleTest1:counter = " + str(counter.value))
+        #print("PeriodicModuleTest1")

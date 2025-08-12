@@ -3,6 +3,7 @@ from src.test.pm_test1 import PeriodicModuleTest1
 from src.test.pm_test2 import PeriodicModuleTest2
 from src.test.pm_test3 import PeriodicModuleTest3
 
+
 def main():
     print("SOUR: Simple Operation for Ubiquitous Robotics")
     r_core = RobotCore()
@@ -13,4 +14,8 @@ def main():
 
 
 if __name__ == "__main__":
+    #manager = multiprocessing.Manager()
+    #counter = manager.Value('i', 0)
+    #lock = manager.Lock()
+
     main()
