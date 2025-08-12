@@ -14,8 +14,5 @@ def main():
 
 
 if __name__ == "__main__":
-    #manager = multiprocessing.Manager()
-    #counter = manager.Value('i', 0)
-    #lock = manager.Lock()
 
     main()
