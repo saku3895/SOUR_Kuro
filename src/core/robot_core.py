@@ -10,7 +10,12 @@ class RobotCore:
         self.async_modules = []
 
         self.manager = multiprocessing.Manager()
-        self.counter = self.manager.Value('i', 0)
+
+        self.lock = multiprocessing.Lock()
+    
+        self.data_dict = self.manager.dict()
+        self.data_dict['counter'] = 0
+        self.data_dict['servo_angles'] = [0.0,0.0,0.0,0.0,0.0,0.0]
 
 
     def register_module(self, module):
@@ -28,7 +33,7 @@ class RobotCore:
         processes = []
         #run all periodic modules
         for module in self.modules:
-            process = multiprocessing.Process(target=module.run, args=[self.counter]) #add shared memory here
+            process = multiprocessing.Process(target=module.run, args=(self.lock, self.data_dict,)) #add shared memory here
             processes.append(process)
             process.start()
 
