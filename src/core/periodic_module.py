@@ -1,11 +1,13 @@
 import time
 
+# the base class for periodic modules. It will be executed periodically with the specified interval
 class PeriodicModule:
     def __init__(self, interval_ms=1000):
         self.interval_ms = interval_ms
 
 
     def run(self, lock, data_dict):
+        #check the interval and execute the periodic task
         time0 = time.perf_counter()
         while True:
 

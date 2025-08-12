@@ -9,10 +9,13 @@ class RobotCore:
         self.modules = []
         self.async_modules = []
 
+        #shared memory
         self.manager = multiprocessing.Manager()
 
+        #exclusive lock
         self.lock = multiprocessing.Lock()
     
+        #data dictionary for shared memory
         self.data_dict = self.manager.dict()
         self.data_dict['counter'] = 0
         self.data_dict['servo_angles'] = [0.0,0.0,0.0,0.0,0.0,0.0]
