@@ -4,7 +4,6 @@ class RobotProperties:
         self.servo_ids = []
         self.servo_min_positions = []
         self.servo_max_positions = []
-        self.servo_initial_positions = []
 
         self.servo_easing_function = ServoEasingFunctions.LINEAR
 
@@ -17,10 +16,12 @@ class ServoEasingFunctions:
     def __init__(self):
         pass
 
-    def linear(self, x):
+    @staticmethod
+    def linear(x):
         return x
 
-    def ease_in_out_cubic(self, x):
+    @staticmethod
+    def ease_in_out_cubic(x):
         if x < 0.5:
             return 4 * x * x * x
         else:

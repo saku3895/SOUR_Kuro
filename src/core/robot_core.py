@@ -21,11 +21,10 @@ class RobotCore:
         num_servos = robot_properties.num_servos
 
         #servo positions and operation parameters
-        self.data_dict['servo_current_positions'] = robot_properties.servo_initial_positions
-        self.data_dict['servo_params_updated'] = True
-
-
-
+        self.data_dict['servo_target_positions'] = [0.0] * num_servos
+        self.data_dict['servo_operation_times'] = [0.0] * num_servos
+        self.data_dict['servo_params_updated'] = False
+        self.data_dict['servo_ready'] = True
 
     def register_module(self, module):
         #accept periodic module only

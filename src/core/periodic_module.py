@@ -16,8 +16,13 @@ class PeriodicModule:
                 time0 = time1
 
                 self.execute_periodic_task(lock, data_dict)
-
         
 
     def execute_periodic_task(self, data_dict):
         pass
+
+    def write_servo_positions(self, lock, data_dict, servo_positions, servo_operation_times):
+        with lock:
+            data_dict['servo_target_positions'] = servo_positions
+            data_dict['servo_operation_times'] = servo_operation_times
+            data_dict['servo_params_updated'] = True
