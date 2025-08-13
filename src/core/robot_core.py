@@ -5,7 +5,7 @@ from src.core.async_module import AsyncModule
 
 class RobotCore:
 
-    def __init__(self):
+    def __init__(self, robot_properties):
         self.modules = []
         self.async_modules = []
 
@@ -17,8 +17,14 @@ class RobotCore:
     
         #data dictionary for shared memory
         self.data_dict = self.manager.dict()
-        self.data_dict['counter'] = 0
-        self.data_dict['servo_angles'] = [0.0,0.0,0.0,0.0,0.0,0.0]
+
+        num_servos = robot_properties.num_servos
+
+        #servo positions and operation parameters
+        self.data_dict['servo_current_positions'] = robot_properties.servo_initial_positions
+        self.data_dict['servo_params_updated'] = True
+
+
 
 
     def register_module(self, module):

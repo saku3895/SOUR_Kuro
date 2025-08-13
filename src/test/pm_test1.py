@@ -6,8 +6,8 @@ class PeriodicModuleTest1(PeriodicModule):
 
     def execute_periodic_task(self, lock, data_dict):
 
-        with lock:
-            data_dict['counter'] += 1
+        ##with lock:
+        ##    data_dict['counter'] += 1
 
         print("PeriodicModuleTest1")
 
