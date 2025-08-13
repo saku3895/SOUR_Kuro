@@ -2,7 +2,7 @@ from src.core.robot_core import RobotCore
 from src.core.robot_properties import RobotProperties, ServoEasingFunctions
 
 from src.modules.pm_servo_control import PMServoControl
-from src.modules.pm_servo_control_hiwonder_servo_bus_controler import PMServoControlHiwonderSerialBusServoController
+from src.modules.pm_servo_control_hiwonder_serial_bus_servo_controller import PMServoControlHiwonderSerialBusServoController
 
 from src.test.pm_test_shiro import PMTestShiro
 
