@@ -1,6 +1,6 @@
 def parse_motion_commands(input_data):
     """
-    モーション言語データを解析してモーター制御値に変換する
+    動作言語をモーター制御値に変換する
     
     Args:
         input_data (tuple): ('20', ['*command1#', '*command2#', ...]) のような形式のタプル
