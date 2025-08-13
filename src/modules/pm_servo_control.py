@@ -25,7 +25,7 @@ class PMServoControl(PeriodicModule):
             
         
 
-    #override this method to send servo commands in each device
+    #override this method to send servo commands to each device
     def send_servo_commands(self, next_positions):
         print("command:" + str(next_positions))
 

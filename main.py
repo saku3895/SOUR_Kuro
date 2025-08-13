@@ -1,12 +1,10 @@
 from src.core.robot_core import RobotCore
 from src.core.robot_properties import RobotProperties, ServoEasingFunctions
-from src.test.pm_test1 import PeriodicModuleTest1
-from src.test.pm_test2 import PeriodicModuleTest2
-from src.test.pm_test3 import PeriodicModuleTest3
-from src.test.pm_test_shiro import PMTestShiro
-from src.modules.pm_servo_control import PMServoControl
-from src.modules.pm_servo_control_hiwonder_servo_bus_controler import PMServoControlHiwonderServoBusControler
 
+from src.modules.pm_servo_control import PMServoControl
+from src.modules.pm_servo_control_hiwonder_servo_bus_controler import PMServoControlHiwonderSerialBusServoController
+
+from src.test.pm_test_shiro import PMTestShiro
 
 def main():
     print("SOUR: Simple Operation for Ubiquitous Robotics")
@@ -22,12 +20,11 @@ def main():
 
 
     r_core = RobotCore(robot_properties)
-    #r_core.register_module(PeriodicModuleTest1(300))
+
+    #register periodic modules
     r_core.register_module(PMTestShiro(robot_properties, 3000))
-    #r_core.register_module(PMServoControl(robot_properties, 100))
-    r_core.register_module(PMServoControlHiwonderServoBusControler(robot_properties, 100))
-    #r_core.register_module(PeriodicModuleTest2(5000))
-    #r_core.register_module(PeriodicModuleTest3(15000))
+    r_core.register_module(PMServoControlHiwonderSerialBusServoController(robot_properties, 100))
+
     r_core.run()
 
 
