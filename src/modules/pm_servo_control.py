@@ -17,12 +17,12 @@ class PMServoControl(PeriodicModule):
         self.all_servos_operated = True
         self.servo_operation_start_time = 0
 
-        self.servo_next_positions = [0.0] * len(self.servo_ids)
         self.servo_target_positions = [0.0] * len(self.servo_ids)
         self.servo_operation_times = [0.0] * len(self.servo_ids)
 
         #set servo prev position to middle
-        self.servo_prev_positions = [0.5 * (self.servo_max_positions[i] + self.servo_min_positions[i]) for i in range(len(self.servo_ids))]
+        self.servo_next_positions = self.servo_prev_positions = robot_properties.servo_initial_positions
+            
         
 
     #override this method to send servo commands in each device

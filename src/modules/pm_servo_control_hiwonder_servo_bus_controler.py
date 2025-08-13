@@ -11,5 +11,5 @@ class PMServoControlHiwonderServoBusControler(PMServoControl):
         command = []
         for i in range(len(self.servo_ids)):
             command.append((self.servo_ids[i], next_positions[i]))
-        #print(command)
-        self.lsc.send_command(command, 10)
+        print(command)
+        #self.lsc.send_command(command, 10)

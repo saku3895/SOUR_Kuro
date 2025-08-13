@@ -13,7 +13,7 @@ class PMTestShiro(PeriodicModule):
         if data_dict['servo_ready'] == False:
             return
 
-        servo_positions = [500.0] * self.robot_properties.num_servos
+        servo_positions = self.robot_properties.servo_initial_positions
         servo_operation_times = [300.0] * self.robot_properties.num_servos
 
         random_pos = random.uniform(300.0, 700.0)
