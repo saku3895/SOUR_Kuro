@@ -14,7 +14,7 @@ class LobotServoController:
     CMD_ACTION_GROUP_SPEED = 0x0B
     CMD_GET_BATTERY_VOLTAGE = 0x0F
     
-    def __init__(self, port='/dev/ttyUSB0', baudrate=9600, timeout=0.1):
+    def __init__(self, port='/dev/ttyAMA0', baudrate=9600, timeout=0.1):
         """
         LobotServoControllerのインスタンスを初期化
         
