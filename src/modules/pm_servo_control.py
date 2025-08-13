@@ -25,6 +25,7 @@ class PMServoControl(PeriodicModule):
         self.servo_prev_positions = [0.5 * (self.servo_max_positions[i] + self.servo_min_positions[i]) for i in range(len(self.servo_ids))]
         
 
+    #override this method to send servo commands in each device
     def send_servo_commands(self, next_positions):
         print("command:" + str(next_positions))
 
@@ -53,6 +54,7 @@ class PMServoControl(PeriodicModule):
             op_elapsed_time = (current_time - self.servo_operation_start_time) * 1000 #milliseconds
             for i in range(len(self.servo_ids)):
 
+                #print(self.servo_target_positions)
                 servo_target_position = self.servo_target_positions[i]
                 servo_operation_time = self.servo_operation_times[i]
                 servo_prev_position = self.servo_prev_positions[i]

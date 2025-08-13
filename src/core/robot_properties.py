@@ -7,6 +7,8 @@ class RobotProperties:
 
         self.servo_easing_function = ServoEasingFunctions.LINEAR
 
+        self.servo_controller_port = '/dev/ttyAMA0'
+
 
 class ServoEasingFunctions:
     #define constant

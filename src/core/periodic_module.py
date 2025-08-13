@@ -18,9 +18,11 @@ class PeriodicModule:
                 self.execute_periodic_task(lock, data_dict)
         
 
+    #the function to be executed periodically
     def execute_periodic_task(self, data_dict):
         pass
 
+    #write the servo positions to the shared memory
     def write_servo_positions(self, lock, data_dict, servo_positions, servo_operation_times):
         with lock:
             data_dict['servo_target_positions'] = servo_positions
