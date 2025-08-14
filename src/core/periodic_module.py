@@ -46,6 +46,7 @@ class PeriodicModule:
             data_dict['servo_operation_times'] = servo_operation_times
             data_dict['servo_params_updated'] = True
 
+    #terminate all modules
     def terminate_all(self, lock, data_dict):
         with lock:
             data_dict['terminate'] = True
