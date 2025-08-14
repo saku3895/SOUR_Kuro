@@ -5,8 +5,12 @@ from src.modules.pm_servo_control import PMServoControl
 from src.modules.pm_servo_control_hiwonder_serial_bus_servo_controller import PMServoControlHiwonderSerialBusServoController
 
 from src.test.pm_test_shiro import PMTestShiro
+from src.test.pm_demo_shiro import PMDemoShiro
 
 def main():
+
+    debug_mode = False
+
     print("SOUR: Simple Operation for Ubiquitous Robotics")
 
     robot_properties = RobotProperties()
@@ -16,14 +20,19 @@ def main():
     robot_properties.servo_max_positions = [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
     robot_properties.servo_initial_positions = [500.0, 350.0, 450.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 370.0, 600.0, 500.0, 700.0, 300.0]
 
-    robot_properties.servo_easing_function = ServoEasingFunctions.LINEAR
+    robot_properties.servo_easing_function = ServoEasingFunctions.EASE_IN_OUT_CUBIC
 
 
     r_core = RobotCore(robot_properties)
 
     #register periodic modules
-    r_core.register_module(PMTestShiro(robot_properties, 3000))
-    r_core.register_module(PMServoControlHiwonderSerialBusServoController(robot_properties, 100))
+    #r_core.register_module(PMTestShiro(robot_properties, 3000))
+    r_core.register_module(PMDemoShiro(robot_properties, 100))
+
+    if debug_mode:
+        r_core.register_module(PMServoControl(robot_properties, 100))
+    else:
+        r_core.register_module(PMServoControlHiwonderSerialBusServoController(robot_properties, 100))
 
     r_core.run()
 

@@ -26,6 +26,9 @@ class RobotCore:
         self.data_dict['servo_params_updated'] = False
         self.data_dict['servo_ready'] = True
 
+        #program termination flag
+        self.data_dict['terminate'] = False
+
     def register_module(self, module):
         #accept periodic module only
         assert isinstance(module, PeriodicModule)
