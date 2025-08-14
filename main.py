@@ -5,7 +5,9 @@ from src.modules.pm_servo_control import PMServoControl
 from src.modules.pm_servo_control_hiwonder_serial_bus_servo_controller import PMServoControlHiwonderSerialBusServoController
 
 from src.test.pm_test_shiro import PMTestShiro
+from src.test.motion_lang_test_shiro import MotionLangTestShiro
 from src.test.pm_demo_shiro import PMDemoShiro
+
 
 def main():
 
@@ -27,6 +29,7 @@ def main():
 
     #register periodic modules
     #r_core.register_module(PMTestShiro(robot_properties, 3000))
+    # r_core.register_module(MotionLangTestShiro(robot_properties, 3000)) gMLPで動作させるとき
     r_core.register_module(PMDemoShiro(robot_properties, 100))
 
     if debug_mode:
