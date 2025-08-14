@@ -2,15 +2,16 @@ from src.core.periodic_module import PeriodicModule
 from src.core.robot_properties import ServoEasingFunctions
 
 import time
+import copy
 
 class PMServoControl(PeriodicModule):
     def __init__(self, robot_properties, interval_ms=1000):
         super().__init__(interval_ms)
 
         #servo information
-        self.servo_ids = robot_properties.servo_ids
-        self.servo_max_positions = robot_properties.servo_max_positions
-        self.servo_min_positions = robot_properties.servo_min_positions
+        self.servo_ids = copy.deepcopy(robot_properties.servo_ids)
+        self.servo_max_positions = copy.deepcopy(robot_properties.servo_max_positions)
+        self.servo_min_positions = copy.deepcopy(robot_properties.servo_min_positions)
         self.servo_easing_function = robot_properties.servo_easing_function
 
         #servo control parameters
@@ -21,7 +22,8 @@ class PMServoControl(PeriodicModule):
         self.servo_operation_times = [0.0] * len(self.servo_ids)
 
         #set servo prev position to middle
-        self.servo_next_positions = self.servo_prev_positions = robot_properties.servo_initial_positions
+        self.servo_prev_positions = copy.deepcopy(robot_properties.servo_initial_positions)
+        self.servo_next_positions = copy.deepcopy(robot_properties.servo_initial_positions)
             
         
 
@@ -31,6 +33,7 @@ class PMServoControl(PeriodicModule):
 
 
     def execute_periodic_task(self, lock, data_dict):
+        super().execute_periodic_task(lock, data_dict)
 
         #check if the servo parameters have been updated
         servo_params_updated = data_dict['servo_params_updated']
@@ -39,10 +42,10 @@ class PMServoControl(PeriodicModule):
             self.all_servos_operated = False
             self.servo_operation_start_time = time.perf_counter()
 
-            self.servo_prev_positions = self.servo_next_positions
+            self.servo_prev_positions = copy.deepcopy(self.servo_next_positions)
 
-            self.servo_target_positions = data_dict['servo_target_positions']
-            self.servo_operation_times = data_dict['servo_operation_times']
+            self.servo_target_positions = copy.deepcopy(data_dict['servo_target_positions'])
+            self.servo_operation_times = copy.deepcopy(data_dict['servo_operation_times'])
 
             with lock:
                 data_dict['servo_params_updated'] = False
@@ -72,6 +75,7 @@ class PMServoControl(PeriodicModule):
 
                 #calculate the servo position
                 servo_position = servo_prev_position + (servo_target_position - servo_prev_position) * op_ratio
+                
                 servo_position = min(max(servo_position, servo_min_position), servo_max_position)
 
                 #set the servo position
