@@ -4,6 +4,7 @@ class RobotProperties:
         self.servo_ids = []
         self.servo_min_positions = []
         self.servo_max_positions = []
+        self.servo_shifts = []
 
         self.servo_easing_function = ServoEasingFunctions.LINEAR
         self.servo_initial_positions = []
