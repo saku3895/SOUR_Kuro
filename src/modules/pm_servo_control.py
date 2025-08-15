@@ -67,6 +67,8 @@ class PMServoControl(PeriodicModule):
                 servo_min_position = self.servo_min_positions[i]
                 servo_shift = self.servo_shifts[i]
 
+                servo_target_position += servo_shift
+
                 #calculate the operation ratio. Do not allow values to be greater than 1.0 or less than 0.0.
                 op_ratio = min(max(0.0, op_elapsed_time / servo_operation_time), 1.0)
 
@@ -77,7 +79,7 @@ class PMServoControl(PeriodicModule):
                     op_ratio = ServoEasingFunctions.ease_in_out_cubic(op_ratio)
 
                 #calculate the servo position
-                servo_position = servo_prev_position + (servo_target_position - servo_prev_position) * op_ratio + servo_shift
+                servo_position = servo_prev_position + (servo_target_position - servo_prev_position) * op_ratio
                 
                 servo_position = min(max(servo_position, servo_min_position), servo_max_position)
 

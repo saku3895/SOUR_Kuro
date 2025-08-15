@@ -67,9 +67,9 @@ class ShiroDemoMotionData():
 
     #motion 1
     demo_motion1_position = [
-        [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 600.0, 600.0, 600.0, 700.0, 700.0, 600.0, 300.0, 300.0],
-        [700.0, 500.0, 500.0, 500.0, 500.0, 500.0, 600.0, 600.0, 600.0, 700.0, 700.0, 600.0, 300.0, 300.0],
-        [300.0, 500.0, 500.0, 500.0, 500.0, 500.0, 600.0, 600.0, 600.0, 700.0, 700.0, 600.0, 300.0, 300.0]
+        [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 600.0, 600.0, 400.0, 700.0, 300.0, 400.0, 300.0, 300.0],
+        [700.0, 500.0, 500.0, 500.0, 500.0, 500.0, 600.0, 600.0, 400.0, 700.0, 300.0, 400.0, 300.0, 300.0],
+        [300.0, 500.0, 500.0, 500.0, 500.0, 500.0, 600.0, 600.0, 400.0, 700.0, 300.0, 400.0, 300.0, 300.0]
     ]
 
     demo_motion1_time = [
@@ -97,7 +97,7 @@ class ShiroDemoMotionData():
 
     #sitting and look around
     def get_demo_motion1(self):
-        return Motion(self.demo_motion1_position, self.demo_motion1_time, self.demo_motion1_interval, loop_time=3, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=10, fluc_amp_time=10, fluc_amp_interval=10)
+        return Motion(self.demo_motion1_position, self.demo_motion1_time, self.demo_motion1_interval, loop_time=3, fluc_type=Motion.FLUCTUATION_TYPE_NONE, fluc_amp_motion=10, fluc_amp_time=10, fluc_amp_interval=10)
 
     def get_demo_motion2(self):
         return Motion(self.demo_motion2_position, self.demo_motion2_time, self.demo_motion2_interval, loop_time=0, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=10, fluc_amp_time=10, fluc_amp_interval=10)
