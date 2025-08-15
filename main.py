@@ -20,7 +20,7 @@ def main():
     robot_properties.servo_max_positions = [850.0, 550.0, 850.0, 850.0, 500.0, 500.0, 900.0, 900.0, 850.0, 600.0, 850.0, 850.0, 850.0, 650.0]
     #robot_properties.servo_initial_positions = [500.0, 350.0, 450.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 370.0, 600.0, 500.0, 700.0, 300.0]
     robot_properties.servo_initial_positions = [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0]
-    robot_properties.servo_shifts = [0.0, -150.0, -50.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 130.0, -100.0, 0.0, 200.0, -200.0]
+    robot_properties.servo_shifts = [0.0, -150.0, -50.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 130.0, -300.0, 0.0, 200.0, -200.0]
 
     robot_properties.servo_easing_function = ServoEasingFunctions.EASE_IN_OUT_CUBIC
 
