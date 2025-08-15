@@ -23,6 +23,9 @@ class Motion():
         self.fluc_amp_time = fluc_amp_time
         self.fluc_amp_interval = fluc_amp_interval
 
+        #for randomizer, prepare 2 dimensional array
+        self.randomizer = [[None for j in range(len(self.position[0]))] for i in range(len(self.position))]
+
         self.motion_finished = False
 
 
@@ -44,6 +47,14 @@ class Motion():
         next_time = copy.deepcopy(self.time[next_index])
         next_interval = copy.deepcopy(self.interval[next_index])
 
+        #set random value
+        for i in range(len(next_position)):
+
+            if self.randomizer[next_index][i] is not None:
+                min_pos, max_pos = self.randomizer[next_index][i]
+                next_position[i] = random.uniform(min_pos, max_pos)
+
+        #set fluctuation
         for i in range(len(next_position)):
 
             if self.fluc_type == Motion.FLUCTUATION_TYPE_UNIFORM:
@@ -59,6 +70,10 @@ class Motion():
     def is_motion_finished(self):
         return self.motion_finished
 
+    def set_randomizer(self, index_i, index_j, min_pos, max_pos):
+        self.randomizer[index_i][index_j] = (min_pos, max_pos)
+        
+
     
 
 class ShiroDemoMotionData():
@@ -67,29 +82,25 @@ class ShiroDemoMotionData():
 
     #motion 1
     demo_motion1_position = [
-        [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 400.0, 600.0, 600.0, 700.0, 700.0, 400.0, 700.0,300.0],
-        [700.0, 500.0, 500.0, 500.0, 500.0, 500.0, 400.0, 600.0, 600.0, 700.0, 700.0, 400.0, 700.0, 300.0],
-        [300.0, 500.0, 500.0, 500.0, 500.0, 500.0, 400.0, 600.0, 600.0, 700.0, 700.0, 400.0, 700.0, 300.0]
+        [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 400.0, 600.0, 600.0, 700.0, 700.0, 400.0, 700.0, 300.0]
     ]
 
     demo_motion1_time = [
-        [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0],
-        [2000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0],
-        [3000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
+        [3000.0, 3000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
     ]
 
-    demo_motion1_interval = [1000.0, 2000.0, 3000.0]
+    demo_motion1_interval = [1000.0]
 
     #motion 2
     demo_motion2_position = [
-        [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 600.0, 600.0, 600.0, 700.0, 700.0, 600.0, 300.0, 300.0]
+        [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0]
     ]
 
     demo_motion2_time = [
         [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
     ]
 
-    demo_motion2_interval = [1000.0]
+    demo_motion2_interval = [10.0]
 
 
     def __init__(self):
@@ -97,16 +108,19 @@ class ShiroDemoMotionData():
 
     #sitting and look around
     def get_demo_motion1(self):
-        return Motion(self.demo_motion1_position, self.demo_motion1_time, self.demo_motion1_interval, loop_time=3, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=10, fluc_amp_interval=10)
+        motion1 = Motion(self.demo_motion1_position, self.demo_motion1_time, self.demo_motion1_interval, loop_time=3, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+        motion1.set_randomizer(0, 0, 100, 850)
+        return motion1
 
     def get_demo_motion2(self):
-        return Motion(self.demo_motion2_position, self.demo_motion2_time, self.demo_motion2_interval, loop_time=0, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=10, fluc_amp_time=10, fluc_amp_interval=10)
+        return Motion(self.demo_motion2_position, self.demo_motion2_time, self.demo_motion2_interval, loop_time=10, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=100, fluc_amp_time=10, fluc_amp_interval=1000)
 
 class PMDemoShiro(PeriodicModule):
     def __init__(self, robot_properties, interval_ms=1000):
         super().__init__(interval_ms)
         self.robot_properties = robot_properties
         self.demo_motion1 = ShiroDemoMotionData().get_demo_motion1()
+        self.demo_motion2 = ShiroDemoMotionData().get_demo_motion2()
         self.next_motion_interval = 0
 
     def execute_periodic_task(self, lock, data_dict):
@@ -119,13 +133,25 @@ class PMDemoShiro(PeriodicModule):
             if self.next_motion_interval > 0:#interval time
                 self.next_motion_interval -= self.interval_ms
             else:
-                if not self.demo_motion1.is_motion_finished():
 
-                    position, time, interval = self.demo_motion1.get_next_motion()
+                # if not self.demo_motion1.is_motion_finished():
+
+                #     position, time, interval = self.demo_motion1.get_next_motion()
+
+                #     self.write_servo_positions(lock, data_dict, position, time)
+
+                #     self.next_motion_interval = interval    
+
+                # else:
+                #     self.terminate_all(lock, data_dict)
+
+                if not self.demo_motion2.is_motion_finished():
+
+                    position, time, interval = self.demo_motion2.get_next_motion()
 
                     self.write_servo_positions(lock, data_dict, position, time)
 
-                    self.next_motion_interval = interval    
+                    self.next_motion_interval = interval
 
                 else:
                     self.terminate_all(lock, data_dict)
