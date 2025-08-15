@@ -108,12 +108,13 @@ class ShiroDemoMotionData():
 
     #sitting and look around
     def get_demo_motion1(self):
-        motion1 = Motion(self.demo_motion1_position, self.demo_motion1_time, self.demo_motion1_interval, loop_time=3, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
-        motion1.set_randomizer(0, 0, 100, 850)
+        motion1 = Motion(self.demo_motion1_position, self.demo_motion1_time, self.demo_motion1_interval, loop_time=15, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+        motion1.set_randomizer(0, 0, 300, 650)
+        motion1.set_randomizer(0, 1, 400, 550)
         return motion1
 
     def get_demo_motion2(self):
-        return Motion(self.demo_motion2_position, self.demo_motion2_time, self.demo_motion2_interval, loop_time=10, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=100, fluc_amp_time=10, fluc_amp_interval=1000)
+        return Motion(self.demo_motion2_position, self.demo_motion2_time, self.demo_motion2_interval, loop_time=10, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=10, fluc_amp_interval=1000)
 
 class PMDemoShiro(PeriodicModule):
     def __init__(self, robot_properties, interval_ms=1000):
@@ -134,27 +135,27 @@ class PMDemoShiro(PeriodicModule):
                 self.next_motion_interval -= self.interval_ms
             else:
 
-                # if not self.demo_motion1.is_motion_finished():
+                if not self.demo_motion1.is_motion_finished():
 
-                #     position, time, interval = self.demo_motion1.get_next_motion()
-
-                #     self.write_servo_positions(lock, data_dict, position, time)
-
-                #     self.next_motion_interval = interval    
-
-                # else:
-                #     self.terminate_all(lock, data_dict)
-
-                if not self.demo_motion2.is_motion_finished():
-
-                    position, time, interval = self.demo_motion2.get_next_motion()
+                    position, time, interval = self.demo_motion1.get_next_motion()
 
                     self.write_servo_positions(lock, data_dict, position, time)
 
-                    self.next_motion_interval = interval
+                    self.next_motion_interval = interval    
 
                 else:
                     self.terminate_all(lock, data_dict)
+
+                # if not self.demo_motion2.is_motion_finished():
+
+                #     position, time, interval = self.demo_motion2.get_next_motion()
+
+                #     self.write_servo_positions(lock, data_dict, position, time)
+
+                #     self.next_motion_interval = interval
+
+                # else:
+                #     self.terminate_all(lock, data_dict)
 
         
         
