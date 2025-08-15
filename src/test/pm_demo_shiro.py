@@ -110,7 +110,7 @@ class ShiroDemoMotionData():
     #motion 3
     demo_motion3_position = [
         [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0],
-        [500.0, 500.0, 600.0, 500.0, 400.0, 500.0, 400.0, 300.0, 600.0, 700.0, 700.0, 700.0, 700.0, 300.0],
+        [500.0, 500.0, 700.0, 500.0, 300.0, 500.0, 400.0, 300.0, 600.0, 700.0, 700.0, 700.0, 700.0, 300.0],
         [500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0, 500.0]
     ]
 
@@ -171,26 +171,26 @@ class PMDemoShiro(PeriodicModule):
                     self.next_motion_interval = interval
                 else:
 
-                # # state transition among demo motions
-                #     if self.current_motion == self.demo_motion1:
-                #         self.current_motion = self.demo_motion2
-                #         print("demo_motion2")
-                #     elif self.current_motion == self.demo_motion3:
-                #         self.current_motion = self.demo_motion2
-                #         print("demo_motion2")
-                #     elif self.current_motion == self.demo_motion2:
-                #         # transition to demo_motion1 in probability of 1/3, demo_motion3 in probability of 1/3, demo_motion2 in probability of 1/3
-                #         if random.randint(0, 2) == 0:
-                #             self.current_motion = self.demo_motion1
-                #             print("demo_motion1")
-                #         elif random.randint(0, 2) == 1:
-                #             self.current_motion = self.demo_motion3
-                #             print("demo_motion3")
-                #         else:
-                #             self.current_motion = self.demo_motion2
-                #             print("demo_motion2")
+                # state transition among demo motions
+                    if self.current_motion == self.demo_motion1:
+                        self.current_motion = self.demo_motion2
+                        print("demo_motion2")
+                    elif self.current_motion == self.demo_motion3:
+                        self.current_motion = self.demo_motion2
+                        print("demo_motion2")
+                    elif self.current_motion == self.demo_motion2:
+                        # transition to demo_motion1 in probability of 1/3, demo_motion3 in probability of 1/3, demo_motion2 in probability of 1/3
+                        if random.randint(0, 2) == 0:
+                            self.current_motion = self.demo_motion1
+                            print("demo_motion1")
+                        elif random.randint(0, 2) == 1:
+                            self.current_motion = self.demo_motion3
+                            print("demo_motion3")
+                        else:
+                            self.current_motion = self.demo_motion2
+                            print("demo_motion2")
 
-                #     self.current_motion.reset()
+                    self.current_motion.reset()
 
 
                 # if not self.demo_motion1.is_motion_finished():
@@ -215,16 +215,16 @@ class PMDemoShiro(PeriodicModule):
                 # else:
                 #     self.terminate_all(lock, data_dict)
 
-                if not self.demo_motion3.is_motion_finished():
+                    # if not self.demo_motion3.is_motion_finished():
 
-                    position, time, interval = self.demo_motion3.get_next_motion()
+                    #     position, time, interval = self.demo_motion3.get_next_motion()
 
-                    self.write_servo_positions(lock, data_dict, position, time)
+                    #     self.write_servo_positions(lock, data_dict, position, time)
 
-                    self.next_motion_interval = interval
+                    #     self.next_motion_interval = interval
 
-                else:
-                    self.terminate_all(lock, data_dict)
+                    # else:
+                    #     self.terminate_all(lock, data_dict)
 
 
         
