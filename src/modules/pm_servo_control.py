@@ -12,6 +12,8 @@ class PMServoControl(PeriodicModule):
         self.servo_ids = copy.deepcopy(robot_properties.servo_ids)
         self.servo_max_positions = copy.deepcopy(robot_properties.servo_max_positions)
         self.servo_min_positions = copy.deepcopy(robot_properties.servo_min_positions)
+        self.servo_shifts = copy.deepcopy(robot_properties.servo_shifts)
+
         self.servo_easing_function = robot_properties.servo_easing_function
 
         #servo control parameters
@@ -63,6 +65,9 @@ class PMServoControl(PeriodicModule):
                 servo_prev_position = self.servo_prev_positions[i]
                 servo_max_position = self.servo_max_positions[i]
                 servo_min_position = self.servo_min_positions[i]
+                servo_shift = self.servo_shifts[i]
+
+                servo_target_position += servo_shift
 
                 #calculate the operation ratio. Do not allow values to be greater than 1.0 or less than 0.0.
                 op_ratio = min(max(0.0, op_elapsed_time / servo_operation_time), 1.0)
