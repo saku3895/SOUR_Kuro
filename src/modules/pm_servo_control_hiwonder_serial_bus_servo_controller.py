@@ -11,7 +11,12 @@ class PMServoControlHiwonderSerialBusServoController(PMServoControl):
             raise ConnectionError("Failed to connect to servo controller")
 
     def send_servo_commands(self, next_positions):
-        #print("command hiwonder:" + str(next_positions))
+
+        """Send servo commands to Hiwonder Serial Bus Servo Controller.
+
+        Args:
+            next_positions (list): List of servo positions to send to the controller.
+        """
         command = []
         for i in range(len(self.servo_ids)):
             command.append((self.servo_ids[i], int(next_positions[i])))

@@ -8,7 +8,17 @@ class PeriodicModule:
 
 
     def run(self, lock, data_dict):
-        #check the interval and execute the periodic task
+        """
+        Check the interval and execute the periodic task
+
+        Parameters
+        ----------
+        lock : multiprocessing.Lock
+            The lock for accessing the shared memory.
+        data_dict : multiprocessing.Manager().dict()
+            The dictionary for shared memory.
+        """
+
         time0 = time.perf_counter()
         while not self.terminate:
 
@@ -41,6 +51,20 @@ class PeriodicModule:
     #write the servo positions to the shared memory
     def write_servo_positions(self, lock, data_dict, servo_positions, servo_operation_times):
 
+        """
+        Write servo positions and operation times to the shared memory.
+
+        Parameters
+        ----------
+        lock : multiprocessing.Lock
+            The lock for accessing the shared memory.
+        data_dict : multiprocessing.Manager().dict()
+            The dictionary for shared memory.
+        servo_positions : list
+            The list of servo positions.
+        servo_operation_times : list
+            The list of servo operation times.
+        """
         with lock:
             data_dict['servo_target_positions'] = servo_positions
             data_dict['servo_operation_times'] = servo_operation_times
@@ -48,5 +72,15 @@ class PeriodicModule:
 
     #terminate all modules
     def terminate_all(self, lock, data_dict):
+        """
+        Terminate all periodic modules.
+
+        Parameters
+        ----------
+        lock : multiprocessing.Lock
+            The lock for accessing the shared memory.
+        data_dict : multiprocessing.Manager().dict()
+            The dictionary for shared memory.
+        """
         with lock:
             data_dict['terminate'] = True
