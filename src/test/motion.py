@@ -1,3 +1,5 @@
+import copy
+import random
 class Motion():
 
     FLUCTUATION_TYPE_NONE = 0
