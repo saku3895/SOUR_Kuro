@@ -9,7 +9,7 @@ class RobotProperties:
         self.servo_easing_function = ServoEasingFunctions.LINEAR
         self.servo_initial_positions = []
 
-        self.servo_controller_port = '/dev/ttyAMA2'
+        self.servo_controller_port = '/dev/ttyAMA0'
 
 
 class ServoEasingFunctions:

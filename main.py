@@ -36,7 +36,8 @@ def main():
     robot_properties.servo_initial_positions = [1500.0, 1500.0, 1500.0, 1500.0]
     robot_properties.servo_shifts = [0.0, 0.0, 0.0, 0.0]
     robot_properties.servo_easing_function = ServoEasingFunctions.EASE_IN_OUT_CUBIC
-
+    robot_properties.servo_controller_port = '/dev/ttyAMA2'
+    
 
     r_core = RobotCore(robot_properties)
 
