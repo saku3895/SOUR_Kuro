@@ -15,9 +15,7 @@ class BettyDemoMotionData():
         [1000.0, 1000.0, 1000.0, 1000.0]
     ]
 
-    demo_motion_default_interval = [
-        [1000.0]
-    ]
+    demo_motion_default_interval = [1000.0]
 
 
     demo_motion_raise_hands_position = [
@@ -28,9 +26,8 @@ class BettyDemoMotionData():
         [1000.0, 1000.0, 1000.0, 1000.0]
     ]
 
-    demo_motion_raise_hands_interval = [
-        [1000.0]
-    ]
+    demo_motion_raise_hands_interval = [1000.0]
+    
 
     def __init__(self):
         pass

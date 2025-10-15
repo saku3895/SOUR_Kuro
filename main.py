@@ -12,7 +12,7 @@ from src.test.pm_demo_betty import PMDemoBetty
 
 def main():
 
-    debug_mode = True
+    debug_mode = False
 
     print("SOUR: Simple Operation for Ubiquitous Robotics")
 
