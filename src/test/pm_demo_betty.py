@@ -19,14 +19,14 @@ class BettyDemoMotionData():
 
 
     demo_motion_raise_hands_position = [
-        [1500.0, 1500.0, 1500.0, 1500.0]
+        [1500.0, 1500.0, 1800.0, 1800.0]
     ]
 
     demo_motion_raise_hands_time = [
-        [1000.0, 1000.0, 1000.0, 1000.0]
+        [1000.0, 1000.0, 2000.0, 2000.0]
     ]
 
-    demo_motion_raise_hands_interval = [1000.0]
+    demo_motion_raise_hands_interval = [3000.0]
     
 
     def __init__(self):
@@ -65,5 +65,11 @@ class PMDemoBetty(PeriodicModule):
 
                 else:
                     # state transition
-                    pass
+                    if self.current_motion == self.demo_motion_default:
+                        # transition to demo_motion_raise_hands in probability of 10%
+                        if random.randfloat(0, 1) < 0.1:
+                            self.current_motion = self.demo_motion_raise_hands
+                    elif self.current_motion == self.demo_motion_raise_hands:
+                        self.current_motion = self.demo_motion_default
 
+                self.current_motion.reset()
