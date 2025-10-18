@@ -17,6 +17,12 @@ class PMUnitV2(PeriodicModule):
 
     def read_data(self):
         self.json_message = self.unitv2.receive_data()
+        print(self.json_message)
+
+    def execute_periodic_task(self, lock, data_dict):
+        super().execute_periodic_task(lock, data_dict)
+
+        self.read_data()
 
 
 

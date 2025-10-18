@@ -33,4 +33,4 @@ class UnitV2SerialCommunication:
         self._check_connection()
         # read serial data until a newline character is received
         data = self.serial.readline().decode('utf-8')
-        print(data)
+        return data
