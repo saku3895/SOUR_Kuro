@@ -10,6 +10,7 @@ class RobotProperties:
         self.servo_initial_positions = []
 
         self.servo_controller_port = '/dev/ttyAMA0'
+        self.camera_port = '/dev/ttyAMA0'
 
 
 class ServoEasingFunctions:

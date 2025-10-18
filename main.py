@@ -3,6 +3,7 @@ from src.core.robot_properties import RobotProperties, ServoEasingFunctions
 
 from src.modules.pm_servo_control import PMServoControl
 from src.modules.pm_servo_control_hiwonder_serial_bus_servo_controller import PMServoControlHiwonderSerialBusServoController
+from src.modules.pm_unitv2 import PMUnitV2
 
 from src.test.pm_test_shiro import PMTestShiro
 from src.test.motion_lang_test_shiro import MotionLangTestShiro
@@ -37,7 +38,8 @@ def main():
     robot_properties.servo_shifts = [0.0, 0.0, 0.0, 0.0]
     robot_properties.servo_easing_function = ServoEasingFunctions.EASE_IN_OUT_CUBIC
     robot_properties.servo_controller_port = '/dev/ttyAMA2'
-    
+    robot_properties.camera_port = '/dev/ttyAMA4'
+
 
     r_core = RobotCore(robot_properties)
 
@@ -46,6 +48,8 @@ def main():
     #r_core.register_module(MotionLangTestShiro(robot_properties, 3000)) gMLPで動作させるとき
     #r_core.register_module(PMDemoShiro(robot_properties, 100)) #demo for shiro
     r_core.register_module(PMDemoBetty(robot_properties, 100))
+
+    r_core.register_module(PMUnitV2(robot_properties, 500))
 
     if debug_mode:
         r_core.register_module(PMServoControl(robot_properties, 100))
