@@ -19,7 +19,7 @@ class BettyDemoMotionData():
 
 
     demo_motion_raise_hands_position = [
-        [1500.0, 1500.0, 2100.0, 2100.0]
+        [1500.0, 1500.0, 2100.0, 900.0]
     ]
 
     demo_motion_raise_hands_time = [
