@@ -16,7 +16,7 @@ class BettyDemoMotionData():
     ]
 
     demo_motion_default_interval = [1000.0]
-
+#########
 
     demo_motion_raise_hands_position = [
         [1500.0, 1500.0, 900.0, 2100.0]
@@ -26,7 +26,61 @@ class BettyDemoMotionData():
         [1000.0, 1000.0, 2000.0, 2000.0]
     ]
 
-    demo_motion_raise_hands_interval = [3000.0]
+    demo_motion_raise_hands_interval = [1000.0]
+##########
+    demo_motion_wave_hand_position = [
+        [1500.0, 1500.0, 1500.0, 2100.0],
+        [1500.0, 1500.0, 1500.0, 900.0],
+        [1500.0, 1500.0, 1500.0, 2100.0],
+        [1500.0, 1500.0, 1500.0, 900.0],
+        [1500.0, 1500.0, 1500.0, 2100.0],
+        [1500.0, 1500.0, 1500.0, 900.0]
+    ]
+
+    demo_motion_wave_hand_time = [
+        [1000.0, 1000.0, 2000.0, 2000.0],
+        [1000.0, 1000.0, 2000.0, 2000.0],
+        [1000.0, 1000.0, 2000.0, 2000.0],
+        [1000.0, 1000.0, 2000.0, 2000.0],
+        [1000.0, 1000.0, 2000.0, 2000.0],
+        [1000.0, 1000.0, 2000.0, 2000.0]
+    ]
+    demo_motion_wave_hand_interval = [1000.0]
+#############
+
+    demo_motion_nod_position = [
+        [1500.0, 1800.0, 1500.0, 1500.0],
+        [1500.0, 1200.0, 1500.0, 1500.0],
+        [1500.0, 1800.0, 1500.0, 1500.0],
+        [1500.0, 1200.0, 1500.0, 1500.0]
+    ]
+
+    demo_motion_nod_time = [
+        [500.0, 500.0, 500.0, 500.0],
+        [500.0, 500.0, 500.0, 500.0],
+        [500.0, 500.0, 500.0, 500.0],
+        [500.0, 500.0, 500.0, 500.0]
+    ]
+
+    demo_motion_nod_interval = [100.0,100.0,100.0,100.0]
+
+#############
+
+    demo_shake_head_position = [
+        [1500.0, 1500.0, 1500.0, 1500.0],
+        [1700.0, 1500.0, 1500.0, 1500.0],
+        [1500.0, 1500.0, 1500.0, 1500.0],
+        [1700.0, 1500.0, 1500.0, 1500.0]
+    ]
+
+    demo_shake_head_time = [
+        [500.0, 500.0, 500.0, 500.0],
+        [500.0, 500.0, 500.0, 500.0],
+        [500.0, 500.0, 500.0, 500.0],
+        [500.0, 500.0, 500.0, 500.0]
+    ]
+
+    demo_shake_head_interval = [100.0,100.0,100.0,100.0]
     
 
     def __init__(self):
@@ -38,12 +92,24 @@ class BettyDemoMotionData():
     def get_demo_motion_raise_hands(self):
         return Motion(self.demo_motion_raise_hands_position, self.demo_motion_raise_hands_time, self.demo_motion_raise_hands_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
 
+    def get_demo_motion_wave_hand(self):
+        return Motion(self.demo_motion_wave_hand_position, self.demo_motion_wave_hand_time, self.demo_motion_wave_hand_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+
+    def get_demo_motion_nod(self):
+        return Motion(self.demo_motion_nod_position, self.demo_motion_nod_time, self.demo_motion_nod_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+
+    def get_demo_motion_shake_head(self):
+        return Motion(self.demo_motion_shake_head_position, self.demo_motion_shake_head_time, self.demo_motion_shake_head_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+
 class PMDemoBetty(PeriodicModule):
     def __init__(self, robot_properties, interval_ms=1000):
         super().__init__(interval_ms)
         self.robot_properties = robot_properties
         self.demo_motion_default = BettyDemoMotionData().get_demo_motion_default()
         self.demo_motion_raise_hands = BettyDemoMotionData().get_demo_motion_raise_hands()
+        self.demo_motion_wave_hand = BettyDemoMotionData().get_demo_motion_wave_hand()
+        self.demo_motion_nod = BettyDemoMotionData().get_demo_motion_nod()
+        self.demo_motion_shake_head = BettyDemoMotionData().get_demo_motion_shake_head()
         self.next_motion_interval = 0
         self.current_motion = self.demo_motion_default
 
@@ -67,9 +133,19 @@ class PMDemoBetty(PeriodicModule):
                     # state transition
                     if self.current_motion == self.demo_motion_default:
                         # transition to demo_motion_raise_hands in probability of 10%
-                        if random.random() < 0.5:
+                        if random.random() < 0.1:
                             self.current_motion = self.demo_motion_raise_hands
                             print("demo_motion_raise_hands")
+                        elif random.random() < 0.2:
+                            self.current_motion = self.demo_motion_wave_hand
+                            print("demo_motion_wave_hand")
+                        elif random.random() < 0.3:
+                            self.current_motion = self.demo_motion_nod
+                            print("demo_motion_nod")
+                        elif random.random() < 0.4:
+                            self.current_motion = self.demo_motion_shake_head
+                            print("demo_motion_shake_head")
+
                     elif self.current_motion == self.demo_motion_raise_hands:
                         self.current_motion = self.demo_motion_default
                         print("demo_motion_default")
