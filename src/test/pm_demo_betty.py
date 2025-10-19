@@ -87,7 +87,7 @@ class BettyDemoMotionData():
         pass
 
     def get_demo_motion_default(self):
-        return Motion(self.demo_motion_default_position, self.demo_motion_default_time, self.demo_motion_default_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=150, fluc_amp_time=1000, fluc_amp_interval=1000)
+        return Motion(self.demo_motion_default_position, self.demo_motion_default_time, self.demo_motion_default_interval, loop_time=3, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=150, fluc_amp_time=1000, fluc_amp_interval=1000)
 
     def get_demo_motion_raise_hands(self):
         return Motion(self.demo_motion_raise_hands_position, self.demo_motion_raise_hands_time, self.demo_motion_raise_hands_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
@@ -133,16 +133,16 @@ class PMDemoBetty(PeriodicModule):
                     # state transition
                     if self.current_motion == self.demo_motion_default:
                         # transition to demo_motion_raise_hands in probability of 10%
-                        if random.random() < 0.1:
+                        if random.random() < 0.05:
                             self.current_motion = self.demo_motion_raise_hands
                             print("demo_motion_raise_hands")
-                        elif random.random() < 0.2:
+                        elif random.random() < 0.1:
                             self.current_motion = self.demo_motion_wave_hand
                             print("demo_motion_wave_hand")
-                        elif random.random() < 0.3:
+                        elif random.random() < 0.15:
                             self.current_motion = self.demo_motion_nod
                             print("demo_motion_nod")
-                        elif random.random() < 0.4:
+                        elif random.random() < 0.2:
                             self.current_motion = self.demo_motion_shake_head
                             print("demo_motion_shake_head")
 
