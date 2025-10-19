@@ -93,13 +93,13 @@ class BettyDemoMotionData():
         return Motion(self.demo_motion_raise_hands_position, self.demo_motion_raise_hands_time, self.demo_motion_raise_hands_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
 
     def get_demo_motion_wave_hand(self):
-        return Motion(self.demo_motion_wave_hand_position, self.demo_motion_wave_hand_time, self.demo_motion_wave_hand_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+        return Motion(self.demo_motion_wave_hand_position, self.demo_motion_wave_hand_time, self.demo_motion_wave_hand_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=10)
 
     def get_demo_motion_nod(self):
-        return Motion(self.demo_motion_nod_position, self.demo_motion_nod_time, self.demo_motion_nod_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+        return Motion(self.demo_motion_nod_position, self.demo_motion_nod_time, self.demo_motion_nod_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=10)
 
     def get_demo_motion_shake_head(self):
-        return Motion(self.demo_motion_shake_head_position, self.demo_motion_shake_head_time, self.demo_motion_shake_head_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+        return Motion(self.demo_motion_shake_head_position, self.demo_motion_shake_head_time, self.demo_motion_shake_head_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=10)
 
 class PMDemoBetty(PeriodicModule):
     def __init__(self, robot_properties, interval_ms=1000):
