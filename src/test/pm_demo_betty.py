@@ -38,21 +38,21 @@ class BettyDemoMotionData():
     ]
 
     demo_motion_wave_hand_time = [
-        [1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0]
+        [300.0, 300.0, 300.0, 300.0],
+        [300.0, 300.0, 300.0, 300.0],
+        [300.0, 300.0, 300.0, 300.0],
+        [300.0, 300.0, 300.0, 300.0],
+        [300.0, 300.0, 300.0, 300.0],
+        [300.0, 300.0, 300.0, 300.0]
     ]
-    demo_motion_wave_hand_interval = [100.0,100.0,100.0,100.0,100.0,100.0]
+    demo_motion_wave_hand_interval = [10.0,10.0,10.0,10.0,10.0,1000.0]
 #############
 
     demo_motion_nod_position = [
         [1500.0, 1500.0, 1500.0, 1500.0],
-        [1500.0, 1700.0, 1500.0, 1500.0],
+        [1500.0, 1600.0, 1500.0, 1500.0],
         [1500.0, 1500.0, 1500.0, 1500.0],
-        [1500.0, 1700.0, 1500.0, 1500.0]
+        [1500.0, 1600.0, 1500.0, 1500.0]
     ]
 
     demo_motion_nod_time = [
@@ -62,7 +62,7 @@ class BettyDemoMotionData():
         [200.0, 200.0, 200.0, 200.0]
     ]
 
-    demo_motion_nod_interval = [100.0,100.0,100.0,100.0]
+    demo_motion_nod_interval = [10.0,10.0,10.0,1000.0]
 
 #############
 
@@ -70,17 +70,17 @@ class BettyDemoMotionData():
         [1300.0, 1500.0, 1500.0, 1500.0],
         [1700.0, 1500.0, 1500.0, 1500.0],
         [1300.0, 1500.0, 1500.0, 1500.0],
-        [1300.0, 1500.0, 1500.0, 1500.0]
+        [1700.0, 1500.0, 1500.0, 1500.0]
     ]
 
     demo_motion_shake_head_time = [
-        [1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0]
+        [200.0, 200.0, 200.0, 200.0],
+        [200.0, 200.0, 200.0, 200.0],
+        [200.0, 200.0, 200.0, 200.0],
+        [200.0, 200.0, 200.0, 200.0]
     ]
 
-    demo_motion_shake_head_interval = [100.0,100.0,100.0,100.0]
+    demo_motion_shake_head_interval = [10.0,10.0,10.0,1000.0]
     
 
     def __init__(self):
@@ -93,13 +93,13 @@ class BettyDemoMotionData():
         return Motion(self.demo_motion_raise_hands_position, self.demo_motion_raise_hands_time, self.demo_motion_raise_hands_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
 
     def get_demo_motion_wave_hand(self):
-        return Motion(self.demo_motion_wave_hand_position, self.demo_motion_wave_hand_time, self.demo_motion_wave_hand_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=10)
+        return Motion(self.demo_motion_wave_hand_position, self.demo_motion_wave_hand_time, self.demo_motion_wave_hand_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM)
 
     def get_demo_motion_nod(self):
-        return Motion(self.demo_motion_nod_position, self.demo_motion_nod_time, self.demo_motion_nod_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=10)
+        return Motion(self.demo_motion_nod_position, self.demo_motion_nod_time, self.demo_motion_nod_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM)
 
     def get_demo_motion_shake_head(self):
-        return Motion(self.demo_motion_shake_head_position, self.demo_motion_shake_head_time, self.demo_motion_shake_head_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=10)
+        return Motion(self.demo_motion_shake_head_position, self.demo_motion_shake_head_time, self.demo_motion_shake_head_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM)
 
 class PMDemoBetty(PeriodicModule):
     def __init__(self, robot_properties, interval_ms=1000):
