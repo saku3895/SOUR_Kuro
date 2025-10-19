@@ -33,7 +33,7 @@ class BettyDemoMotionData():
         pass
 
     def get_demo_motion_default(self):
-        return Motion(self.demo_motion_default_position, self.demo_motion_default_time, self.demo_motion_default_interval, loop_time=0, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=150, fluc_amp_time=1000, fluc_amp_interval=1000)
+        return Motion(self.demo_motion_default_position, self.demo_motion_default_time, self.demo_motion_default_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=150, fluc_amp_time=1000, fluc_amp_interval=1000)
 
     def get_demo_motion_raise_hands(self):
         return Motion(self.demo_motion_raise_hands_position, self.demo_motion_raise_hands_time, self.demo_motion_raise_hands_interval, loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
