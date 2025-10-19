@@ -45,7 +45,7 @@ class BettyDemoMotionData():
         [1000.0, 1000.0, 2000.0, 2000.0],
         [1000.0, 1000.0, 2000.0, 2000.0]
     ]
-    demo_motion_wave_hand_interval = [1000.0]
+    demo_motion_wave_hand_interval = [100.0,100.0,100.0,100.0,100.0,100.0]
 #############
 
     demo_motion_nod_position = [
