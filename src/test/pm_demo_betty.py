@@ -66,21 +66,21 @@ class BettyDemoMotionData():
 
 #############
 
-    demo_shake_head_position = [
+    demo_motion_shake_head_position = [
         [1500.0, 1500.0, 1500.0, 1500.0],
         [1700.0, 1500.0, 1500.0, 1500.0],
         [1500.0, 1500.0, 1500.0, 1500.0],
         [1700.0, 1500.0, 1500.0, 1500.0]
     ]
 
-    demo_shake_head_time = [
+    demo_motion_shake_head_time = [
         [500.0, 500.0, 500.0, 500.0],
         [500.0, 500.0, 500.0, 500.0],
         [500.0, 500.0, 500.0, 500.0],
         [500.0, 500.0, 500.0, 500.0]
     ]
 
-    demo_shake_head_interval = [100.0,100.0,100.0,100.0]
+    demo_motion_shake_head_interval = [100.0,100.0,100.0,100.0]
     
 
     def __init__(self):
