@@ -69,7 +69,9 @@ class PMDemoBetty(PeriodicModule):
                         # transition to demo_motion_raise_hands in probability of 10%
                         if random.randfloat(0, 1) < 0.9:
                             self.current_motion = self.demo_motion_raise_hands
+                            print("demo_motion_raise_hands")
                     elif self.current_motion == self.demo_motion_raise_hands:
                         self.current_motion = self.demo_motion_default
+                        print("demo_motion_default")
 
                 self.current_motion.reset()
