@@ -47,7 +47,7 @@ def main():
     #r_core.register_module(PMTestShiro(robot_properties, 3000))
     #r_core.register_module(MotionLangTestShiro(robot_properties, 3000)) gMLPで動作させるとき
     #r_core.register_module(PMDemoShiro(robot_properties, 100)) #demo for shiro
-    r_core.register_module(PMDemoBetty(robot_properties, 100))
+    r_core.register_module(PMDemoBetty(robot_properties, 80))
 
     r_core.register_module(PMUnitV2(robot_properties, 500))
 
