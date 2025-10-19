@@ -49,10 +49,10 @@ class BettyDemoMotionData():
 #############
 
     demo_motion_nod_position = [
-        [1500.0, 1800.0, 1500.0, 1500.0],
-        [1500.0, 1200.0, 1500.0, 1500.0],
-        [1500.0, 1800.0, 1500.0, 1500.0],
-        [1500.0, 1200.0, 1500.0, 1500.0]
+        [1500.0, 1500.0, 1500.0, 1500.0],
+        [1500.0, 1700.0, 1500.0, 1500.0],
+        [1500.0, 1500.0, 1500.0, 1500.0],
+        [1500.0, 1700.0, 1500.0, 1500.0]
     ]
 
     demo_motion_nod_time = [
@@ -62,7 +62,7 @@ class BettyDemoMotionData():
         [500.0, 500.0, 500.0, 500.0]
     ]
 
-    demo_motion_nod_interval = [100.0,100.0,100.0,100.0]
+    demo_motion_nod_interval = [10.0,10.0,10.0,10.0]
 
 #############
 
@@ -147,6 +147,15 @@ class PMDemoBetty(PeriodicModule):
                             print("demo_motion_shake_head")
 
                     elif self.current_motion == self.demo_motion_raise_hands:
+                        self.current_motion = self.demo_motion_default
+                        print("demo_motion_default")
+                    elif self.current_motion == self.demo_motion_wave_hand:
+                        self.current_motion = self.demo_motion_default
+                        print("demo_motion_default")
+                    elif self.current_motion == self.demo_motion_nod:
+                        self.current_motion = self.demo_motion_default
+                        print("demo_motion_default")
+                    elif self.current_motion == self.demo_motion_shake_head:
                         self.current_motion = self.demo_motion_default
                         print("demo_motion_default")
 
