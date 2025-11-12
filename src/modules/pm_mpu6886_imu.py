@@ -2,7 +2,7 @@ from src.core.periodic_module import PeriodicModule
 from src.communication.mpu6886 import MPU6886
 
 class PMMPU6886IMU(PeriodicModule):
-    def __init__(self, interval_ms=1000):
+    def __init__(self, robot_properties,interval_ms=1000):
         super().__init__(interval_ms)
         self.mpu6886 = MPU6886()
         self.mpu6886.initialize()
