@@ -107,7 +107,7 @@ class MPU6886:
 
         ##2 div, FIFO 500hz out
         regdata = 0x01
-        self.bus.write_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.SMPLRT_DIV.value, [regdata])
+        self.bus.write_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_SMPLRT_DIV.value, [regdata])
         time.sleep(0.001)
 
         regdata = 0x00
