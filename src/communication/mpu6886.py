@@ -180,23 +180,23 @@ class MPU6886:
 
 
     def update_gres(self):
-        if self.gy_scale == GSCALE_GFS_250DPS:
+        if self.gy_scale == MPU6886Constants.GSCALE_GFS_250DPS:
             self.g_res = 250.0/32768.0
-        elif self.gy_scale == GSCALE_GFS_500DPS:
+        elif self.gy_scale == MPU6886Constants.GSCALE_GFS_500DPS:
             self.g_res = 500.0/32768.0
-        elif self.gy_scale == GSCALE_GFS_1000DPS:
+        elif self.gy_scale == MPU6886Constants.GSCALE_GFS_1000DPS:
             self.g_res = 1000.0/32768.0
-        elif self.gy_scale == GSCALE_GFS_2000DPS:
+        elif self.gy_scale == MPU6886Constants.GSCALE_GFS_2000DPS:
             self.g_res = 2000.0/32768.0
 
     def update_ares(self):
-        if self.ac_scale == ASCALE_AFS_2G:
+        if self.ac_scale == MPU6886Constants.ASCALE_AFS_2G:
             self.a_res = 2.0/32768.0
-        elif self.ac_scale == ASCALE_AFS_4G:
+        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_4G:
             self.a_res = 4.0/32768.0
-        elif self.ac_scale == ASCALE_AFS_8G:
+        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_8G:
             self.a_res = 8.0/32768.0
-        elif self.ac_scale == ASCALE_AFS_16G:
+        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_16G:
             self.a_res = 16.0/32768.0
 
 
