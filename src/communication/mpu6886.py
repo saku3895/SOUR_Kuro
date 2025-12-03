@@ -213,6 +213,7 @@ class MPU6886:
 
     def get_gyro_data(self):
         gx, gy, gz = self.get_gyro_adc()
+        print(f"get_gyro_data:gx: {gx}, gy: {gy}, gz: {gz}, self.g_res: {self.g_res}")
 
         gx *= self.g_res
         gy *= self.g_res
