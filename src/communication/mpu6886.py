@@ -192,13 +192,13 @@ class MPU6886:
             self.g_res = 2000.0/32768.0
 
     def update_ares(self):
-        if self.ac_scale == MPU6886Constants.ASCALE_AFS_2G.value::
+        if self.ac_scale == MPU6886Constants.ASCALE_AFS_2G.value:
             self.a_res = 2.0/32768.0
-        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_4G.value::
+        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_4G.value:
             self.a_res = 4.0/32768.0
-        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_8G.value::
+        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_8G.value:
             self.a_res = 8.0/32768.0
-        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_16G.value::
+        elif self.ac_scale == MPU6886Constants.ASCALE_AFS_16G.value:
             self.a_res = 16.0/32768.0
 
 
@@ -213,7 +213,7 @@ class MPU6886:
 
     def get_gyro_data(self):
         gx, gy, gz = self.get_gyro_adc()
-        print(f"get_gyro_data:gx: {gx}, gy: {gy}, gz: {gz}, self.g_res: {self.g_res}")
+        #print(f"get_gyro_data:gx: {gx}, gy: {gy}, gz: {gz}, self.g_res: {self.g_res}")
 
         gx *= self.g_res
         gy *= self.g_res
