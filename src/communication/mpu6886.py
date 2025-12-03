@@ -134,8 +134,10 @@ class MPU6886:
         self.bus.write_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_INT_ENABLE.value, [regdata])
         time.sleep(0.01)
 
-        self.update_gres()
-        self.update_ares()
+        #self.update_gres()
+        #self.update_ares()
+        self.set_gyro_fsr(self.gyscale)
+        self.set_accel_fsr(self.acscale)
 
     def get_accel_adc(self):
         buf = self.bus.read_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_ACCEL_XOUT_H.value, 6)
