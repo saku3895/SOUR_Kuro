@@ -151,10 +151,12 @@ class MPU6886:
 
     def get_gyro_adc(self):
         buf = self.bus.read_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_GYRO_XOUT_H.value, 6)
-
+        print("Gyro_ADC:buf:" + type(buf))
         gx = ((buf[0] << 8) | buf[1])
         gy = ((buf[2] << 8) | buf[3])
         gz = ((buf[4] << 8) | buf[5])
+
+        print ("Gyro_ADC:gx" + type(gx) + "," + type(gy) + "," + type(gz))
 
         return gx, gy, gz
 
