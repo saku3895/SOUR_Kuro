@@ -2,6 +2,7 @@ from enum import Enum
 from smbus2 import SMBus
 import time
 import numpy
+import struct
 
 class MPU6886Constants(Enum):
     IMU_6886_ADDRESS = 0x68
@@ -142,30 +143,35 @@ class MPU6886:
     def get_accel_adc(self):
         buf = self.bus.read_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_ACCEL_XOUT_H.value, 6)
 
+        values = struct.unpack('>hhh', bytes(buf))
+        #ax = ((buf[0] << 8) | buf[1])
+        #ay = ((buf[2] << 8) | buf[3])
+        #az = ((buf[4] << 8) | buf[5])
 
-        ax = ((buf[0] << 8) | buf[1])
-        ay = ((buf[2] << 8) | buf[3])
-        az = ((buf[4] << 8) | buf[5])
-
-        return ax, ay, az
+        #return ax, ay, az
+        return values[0], values[1], values[2]
 
     def get_gyro_adc(self):
         buf = self.bus.read_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_GYRO_XOUT_H.value, 6)
-        print("Gyro_ADC:buf:" + type(buf))
-        gx = ((buf[0] << 8) | buf[1])
-        gy = ((buf[2] << 8) | buf[3])
-        gz = ((buf[4] << 8) | buf[5])
 
-        print ("Gyro_ADC:gx" + type(gx) + "," + type(gy) + "," + type(gz))
+        values = struct.unpack('>hhh', bytes(buf))
+        #print("Gyro_ADC:buf:" + type(buf))
+        #gx = ((buf[0] << 8) | buf[1])
+        #gy = ((buf[2] << 8) | buf[3])
+        #gz = ((buf[4] << 8) | buf[5])
 
-        return gx, gy, gz
+        #print ("Gyro_ADC:gx" + type(gx) + "," + type(gy) + "," + type(gz))
+
+        #return gx, gy, gz
+        return values[0], values[1], values[2]
 
     def get_temp_adc(self):
         buf = self.bus.read_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_TEMP_OUT_H.value, 2)
 
-        temp = ((buf[0] << 8) | buf[1])
+        #temp = ((buf[0] << 8) | buf[1])
+        temp = struct.unpack('>h', bytes(buf))
 
-        return temp
+        return temp[0]
 
 
     def set_gyro_fsr(self, g_scale):
