@@ -217,7 +217,7 @@ class MPU6886:
         ay *= self.a_res
         az *= self.a_res
 
-        return ax, ay, az
+        return [ax, ay, az]
 
     def get_gyro_data(self):
         gx, gy, gz = self.get_gyro_adc()
@@ -227,7 +227,7 @@ class MPU6886:
         gy *= self.g_res
         gz *= self.g_res
 
-        return gx, gy, gz
+        return [gx, gy, gz]
 
     def get_temp_data(self):
         temp = self.get_temp_adc()
