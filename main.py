@@ -56,7 +56,7 @@ def main():
     #r_core.register_module(PMUnitV2(robot_properties, 500))
 
     if debug_mode:
-        r_core.register_module(PMServoControl(robot_properties, 100))
+        r_core.register_module(PMServoControl(robot_properties, 10))
     else:
         r_core.register_module(PMServoControlHiwonderSerialBusServoController(robot_properties, 100))
 

@@ -27,7 +27,7 @@ class PMMPU6886IMU(PeriodicModule):
         self.ahrs.update_no_magnetometer(na_gyro_data, na_accel_data, 0.01)
         euler_angles = self.ahrs.quaternion.to_euler()
 
-        print(f"euler angles: roll: {euler_angles[0]}, pitch: {euler_angles[1]}, yaw: {euler_angles[2]}")
+        print(f"euler angles:  pitch: {euler_angles[0]}, roll: {euler_angles[1]}, yaw: {euler_angles[2]}")
 
         #print(f"gx: {gx}, gy: {gy}, gz: {gz}, ax: {ax}, ay: {ay}, az: {az}, temp: {temp}")
 
