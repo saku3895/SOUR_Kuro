@@ -24,7 +24,7 @@ class PMMPU6886IMU(PeriodicModule):
 
         temp = self.mpu6886.get_temp_data()
 
-        self.ahrs.update_no_magnetometer(na_gyro_data, na_accel_data, 0.01)
+        self.ahrs.update_no_magnetometer(na_gyro_data, na_accel_data, 0.01)# 0.01 = 10ms. Third argument is sampling period in seconds(should be the same as self.interval_ms)
         euler_angles = self.ahrs.quaternion.to_euler()
 
         print(f"euler angles:  pitch: {euler_angles[0]}, roll: {euler_angles[1]}, yaw: {euler_angles[2]}")
