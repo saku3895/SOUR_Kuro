@@ -16,9 +16,14 @@ class PMMPU6886IMU(PeriodicModule):
 
         gyro_data = self.mpu6886.get_gyro_data()
         accel_data = self.mpu6886.get_accel_data()
+
+        #convert gyro_data and accel_data to numpy.array
+        na_gyro_data = numpy.array(gyro_data)
+        na_accel_data = numpy.array(accel_data)
+
         temp = self.mpu6886.get_temp_data()
 
-        ahrs.update_no_magnetometer(gyro_data, accel_data, 0.1)
+        ahrs.update_no_magnetometer(na_gyro_data, naaccel_data, 0.1)
         euler_angles = ahrs.quaternion.to_euler()
 
         print(f"euler angles: roll: {euler_angles[0]}, pitch: {euler_angles[1]}, yaw: {euler_angles[2]}")
