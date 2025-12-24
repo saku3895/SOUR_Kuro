@@ -1,0 +1,12 @@
+certifi==2025.11.12
+charset-normalizer==3.4.4
+future==1.0.0
+idna==3.11
+imufusion==1.2.11
+iso8601==2.1.0
+numpy==2.4.0
+PyYAML==6.0.3
+requests==2.32.5
+serial==0.0.97
+smbus2==0.6.0
+urllib3==2.6.2
