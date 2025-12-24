@@ -2,6 +2,7 @@ from src.core.periodic_module import PeriodicModule
 from src.communication.mpu6886 import MPU6886
 
 import imufusion
+import numpy
 
 class PMMPU6886IMU(PeriodicModule):
     def __init__(self, robot_properties,interval_ms=1000):
@@ -23,8 +24,8 @@ class PMMPU6886IMU(PeriodicModule):
 
         temp = self.mpu6886.get_temp_data()
 
-        ahrs.update_no_magnetometer(na_gyro_data, naaccel_data, 0.1)
-        euler_angles = ahrs.quaternion.to_euler()
+        self.ahrs.update_no_magnetometer(na_gyro_data, na_accel_data, 0.01)
+        euler_angles = self.ahrs.quaternion.to_euler()
 
         print(f"euler angles: roll: {euler_angles[0]}, pitch: {euler_angles[1]}, yaw: {euler_angles[2]}")
 

@@ -14,7 +14,7 @@ from src.test.pm_demo_betty import PMDemoBetty
 
 def main():
 
-    debug_mode = False
+    debug_mode = True
 
     print("SOUR: Simple Operation for Ubiquitous Robotics")
 
@@ -49,7 +49,7 @@ def main():
     #r_core.register_module(PMTestShiro(robot_properties, 3000))
     #r_core.register_module(MotionLangTestShiro(robot_properties, 3000)) gMLPで動作させるとき
     #r_core.register_module(PMDemoShiro(robot_properties, 100)) #demo for shiro
-    r_core.register_module(PMMPU6886IMU(robot_properties, 100))
+    r_core.register_module(PMMPU6886IMU(robot_properties, 10))
 
     ## for betty
     #r_core.register_module(PMDemoBetty(robot_properties, 80))
