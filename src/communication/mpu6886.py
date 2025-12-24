@@ -141,28 +141,37 @@ class MPU6886:
         self.set_accel_fsr(self.acscale)
 
     def get_accel_adc(self):
+        """
+        Get raw acceleration data from MPU6886
+
+        Returns
+        -------
+        tuple[int, int, int]
+            Raw acceleration data (x, y, z) in 16-bit signed integer
+        """
+        
         buf = self.bus.read_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_ACCEL_XOUT_H.value, 6)
 
+        #convert 6byte data to 3 short (x, y, z)
         values = struct.unpack('>hhh', bytes(buf))
-        #ax = ((buf[0] << 8) | buf[1])
-        #ay = ((buf[2] << 8) | buf[3])
-        #az = ((buf[4] << 8) | buf[5])
 
-        #return ax, ay, az
         return values[0], values[1], values[2]
 
     def get_gyro_adc(self):
+        """
+        Get raw gyro data from MPU6886
+
+        Returns
+        -------
+        tuple[int, int, int]
+            Raw gyro data (x, y, z) in 16-bit signed integer
+        """
+        
         buf = self.bus.read_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_GYRO_XOUT_H.value, 6)
 
+        #convert 6byte data to 3 short (x, y, z)
         values = struct.unpack('>hhh', bytes(buf))
-        #print("Gyro_ADC:buf:" + type(buf))
-        #gx = ((buf[0] << 8) | buf[1])
-        #gy = ((buf[2] << 8) | buf[3])
-        #gz = ((buf[4] << 8) | buf[5])
 
-        #print ("Gyro_ADC:gx" + type(gx) + "," + type(gy) + "," + type(gz))
-
-        #return gx, gy, gz
         return values[0], values[1], values[2]
 
     def get_temp_adc(self):
@@ -175,6 +184,15 @@ class MPU6886:
 
 
     def set_gyro_fsr(self, g_scale):
+        """
+        Set gyro full scale range (FSR)
+        
+        Parameters
+        ----------
+        g_scale : int
+            Gyro FSR (250, 500, 1000, 2000 dps)
+        """
+
         regdata = (g_scale << 3)
         self.bus.write_i2c_block_data(MPU6886Constants.IMU_6886_ADDRESS.value, MPU6886Constants.IMU_6886_GYRO_CONFIG.value, [regdata])
         time.sleep(0.01)
@@ -190,6 +208,21 @@ class MPU6886:
 
 
     def update_gres(self):
+        """
+        Update gyro resolution based on the current gyro full scale range (FSR)
+
+        The gyro resolution is used to convert the raw gyro data to the actual angle rate.
+
+        The gyro resolution is calculated as follows:
+
+        g_res = FSR / 32768.0
+
+        Where FSR is the current gyro full scale range.
+
+        The supported FSR values are 250, 500, 1000, and 2000 dps.
+
+        """
+        
         if self.gy_scale == MPU6886Constants.GSCALE_GFS_250DPS.value:
             self.g_res = 250.0/32768.0
         elif self.gy_scale == MPU6886Constants.GSCALE_GFS_500DPS.value:
@@ -200,6 +233,20 @@ class MPU6886:
             self.g_res = 2000.0/32768.0
 
     def update_ares(self):
+        """
+        Update accelerometer resolution based on the current accelerometer full scale range (FSR)
+
+        The accelerometer resolution is used to convert the raw accelerometer data to the actual acceleration.
+
+        The accelerometer resolution is calculated as follows:
+
+        a_res = FSR / 32768.0
+
+        Where FSR is the current accelerometer full scale range.
+
+        The supported FSR values are 2, 4, 8, and 16 g.
+        """
+        
         if self.ac_scale == MPU6886Constants.ASCALE_AFS_2G.value:
             self.a_res = 2.0/32768.0
         elif self.ac_scale == MPU6886Constants.ASCALE_AFS_4G.value:
@@ -211,6 +258,23 @@ class MPU6886:
 
 
     def get_accel_data(self):
+        """
+        Get the acceleration data from the MPU6886
+
+        The acceleration data is read from the MPU6886 and then
+        converted from raw data to actual acceleration values
+        based on the current accelerometer full scale range (FSR).
+
+        The acceleration values are returned as a list of three
+        floats, representing the acceleration in the x, y, and z
+        axes, respectively.
+
+        Returns
+        -------
+        list[float, float, float]
+            The acceleration data in the x, y, and z axes (m/s^2)
+        """
+        
         ax, ay, az = self.get_accel_adc()
 
         ax *= self.a_res
@@ -220,6 +284,23 @@ class MPU6886:
         return [ax, ay, az]
 
     def get_gyro_data(self):
+        """
+        Get the gyro data from the MPU6886
+
+        The gyro data is read from the MPU6886 and then
+        converted from raw data to actual gyro values
+        based on the current gyro full scale range (FSR).
+
+        The gyro values are returned as a list of three
+        floats, representing the gyro in the x, y, and z
+        axes, respectively.
+
+        Returns
+        -------
+        list[float, float, float]
+            The gyro data in the x, y, and z axes (dps)
+        """
+        
         gx, gy, gz = self.get_gyro_adc()
         #print(f"get_gyro_data:gx: {gx}, gy: {gy}, gz: {gz}, self.g_res: {self.g_res}")
 
@@ -230,6 +311,18 @@ class MPU6886:
         return [gx, gy, gz]
 
     def get_temp_data(self):
+        """
+        Get the temperature data from the MPU6886
+
+        The temperature data is read from the MPU6886 and then
+        converted from raw data to actual temperature values
+
+        Returns
+        -------
+        float
+            The temperature data (°C)
+        """
+        
         temp = self.get_temp_adc()
 
         temp = temp/326.8 + 25.0
@@ -237,6 +330,8 @@ class MPU6886:
         return temp
 
     def set_gyro_offset(self, x, y, z):
+        #not used
+        
         ##prepare numpy list of uint8
         buf = numpy.zeros(6, dtype=numpy.uint8)
         buf[0] = x >> 8

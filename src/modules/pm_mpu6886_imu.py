@@ -28,15 +28,3 @@ class PMMPU6886IMU(PeriodicModule):
         euler_angles = self.ahrs.quaternion.to_euler()
 
         print(f"euler angles:  pitch: {euler_angles[0]}, roll: {euler_angles[1]}, yaw: {euler_angles[2]}")
-
-        #print(f"gx: {gx}, gy: {gy}, gz: {gz}, ax: {ax}, ay: {ay}, az: {az}, temp: {temp}")
-
-        #data_dict['gx'] = gx
-        #data_dict['gy'] = gy
-        #data_dict['gz'] = gz
-
-        #data_dict['ax'] = ax
-        #data_dict['ay'] = ay
-        #data_dict['az'] = az
-
-        #data_dict['temp'] = temp
