@@ -14,7 +14,7 @@ class LobotServoController:
     CMD_ACTION_GROUP_SPEED = 0x0B
     CMD_GET_BATTERY_VOLTAGE = 0x0F
     
-    def __init__(self, port='/dev/ttyAMA0', baudrate=9600, timeout=0.1):
+    def __init__(self, port='/dev/ttyAMA1', baudrate=9600, timeout=0.1):#115200
         """
         LobotServoControllerのインスタンスを初期化
         
@@ -147,6 +147,7 @@ class LobotServoController:
         ])
         
         self.ser.write(tx_buf)
+        print("sent:", tx_buf.hex())
         
         # 応答を待機
         time.sleep(0.1)
@@ -164,7 +165,7 @@ class LobotServoController:
 
 # 使用例
 if __name__ == "__main__":
-    myse = LobotServoController(port='/dev/ttyAMA0')
+    myse = LobotServoController(port='/dev/ttyS0')#ttyAMA0
 
     if myse.connect():
         try:
@@ -175,10 +176,10 @@ if __name__ == "__main__":
 
             # 2つのサーボを同時に制御
             # [(サーボID, 位置), (サーボID, 位置)]の形式でリストを渡す
-            myse.moveServos([(2, 200), (3, 500)], 1000)  # サーボ3と4を同時に移動 1s
+            myse.moveServos([(8, 800)], 1000)  # サーボ3と4を同時に移動 1s
             time.sleep(2.0)
-            myse.moveServos([(2, 600), (3, 300)], 1000)  # 逆方向に移動 1s
-            time.sleep(2.0)
+            # myse.moveServos([(8, 600)], 1000)  # 逆方向に移動 1s
+            # time.sleep(2.0)
 
         except KeyboardInterrupt:
             print("\nProgram stopped by user")

@@ -11,20 +11,20 @@ def parse_motion_commands(input_data):
     
     # キーとモーター情報のマッピング
     motor_mapping = {
-        'a': {'motor_id': 2, 'range': (850, 100), 'input_range': (0, 9)},
-        'd': {'motor_id': 3, 'range': (0, 550), 'input_range': (3, 8)},
-        'e': {'motor_id': 4, 'range': (500, 850), 'input_range': (0, 5)},
-        'q': {'motor_id': 5, 'range': (850, 450), 'input_range': (5, 9)},
-        'i': {'motor_id': 6, 'range': (100, 500), 'input_range': (5, 9)},
-        'm': {'motor_id': 7, 'range': (500, 130), 'input_range': (0, 5)},
-        'n': {'motor_id': 8, 'range': (150, 900), 'input_range': (0, 9)},
-        'f': {'motor_id': 9, 'range': (100, 900), 'input_range': (0, 9)},
-        'r': {'motor_id': 10, 'range': (850, 90), 'input_range': (0, 9)},
-        'h': {'motor_id': 11, 'range': (200, 600), 'input_range': (2, 7)},
-        'l': {'motor_id': 12, 'range': (850, 400), 'input_range': (2, 7)},
-        'j': {'motor_id': 13, 'range': (850, 100), 'input_range': (0, 9)},
-        'p': {'motor_id': 14, 'range': (450, 850), 'input_range': (2, 7)},
-        't': {'motor_id': 15, 'range': (650, 150), 'input_range': (2, 7)}
+        'a': {'motor_id': 2, 'range': (2110, 800), 'input_range': (0, 9)},
+        'd': {'motor_id': 3, 'range': (1010, 1550), 'input_range': (3, 8)},
+        'e': {'motor_id': 4, 'range': (1300, 2000), 'input_range': (0, 5)},
+        'q': {'motor_id': 5, 'range': (1800, 800), 'input_range': (5, 9)},
+        'i': {'motor_id': 6, 'range': (1100, 1700), 'input_range': (5, 9)},
+        'm': {'motor_id': 7, 'range': (2000, 1350), 'input_range': (0, 5)},
+        'n': {'motor_id': 8, 'range': (1250, 2000), 'input_range': (0, 9)},
+        'f': {'motor_id': 9, 'range': (1100, 2100), 'input_range': (0, 9)},
+        'r': {'motor_id': 10, 'range': (1800, 1000), 'input_range': (0, 9)},
+        'h': {'motor_id': 11, 'range': (540, 1750), 'input_range': (2, 7)},
+        'l': {'motor_id': 12, 'range': (2500, 1100), 'input_range': (2, 7)},
+        'j': {'motor_id': 13, 'range': (1700, 800), 'input_range': (0, 9)},
+        'p': {'motor_id': 14, 'range': (600, 1900), 'input_range': (2, 7)},
+        't': {'motor_id': 15, 'range': (2300, 1100), 'input_range': (2, 7)}
     }
     
     def calculate_motor_value(key, input_value):

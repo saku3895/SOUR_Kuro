@@ -1,7 +1,7 @@
 class RobotProperties:
     def __init__(self):
-        self.num_servos = 0
-        self.servo_ids = []
+        self.num_servos = 1
+        self.servo_ids = [8]
         self.servo_min_positions = []
         self.servo_max_positions = []
         self.servo_shifts = []
