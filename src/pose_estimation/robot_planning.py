@@ -65,7 +65,7 @@ class RobotTaskPlanner:
         # 4. 🔥 【先輩の方式を流用】 requests を使って外部のLLMサーバーへ送信
         # ここでは一般的なOllamaのAPI形式（Llama3等を想定）のデータ構造にしています
         payload = {
-            "model": "llama3",       # 使用するモデル名（Ollamaに入っているもの）
+            "model": "llama3.1:8b",       # 使用するモデル名（Ollamaに入っているもの）
             "prompt": prompt,
             "stream": False,         # 返答を細切れにせず、一括で受け取る設定
             "format": "json"         # 出力をJSONに固定するOllamaの機能

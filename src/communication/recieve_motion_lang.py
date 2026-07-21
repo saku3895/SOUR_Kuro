@@ -11,8 +11,8 @@ def receive_gmlp(base_text):
         num_sentence: 生成された文の数
         re_text: 生成された文のリスト
     """
-    url_get = 'http://192.168.11.6:8000'
-    url_post = 'http://192.168.11.6:8000'
+    url_get = 'http://192.168.11.5:8000'
+    url_post = 'http://192.168.11.5:8000'
 
     response = requests.get(url_get)
     print(response.text+"\n")

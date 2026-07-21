@@ -49,9 +49,12 @@ def main():
 
     robot_properties.num_servos = 14
     robot_properties.servo_ids = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-    robot_properties.servo_min_positions = [800.0, 1010.0, 1300.0, 800.0, 1100.0, 1350.0, 1250.0, 1100.0, 1000.0, 540.0, 1100.0, 800.0, 600.0, 1100.0]
-    robot_properties.servo_max_positions = [2110.0, 1550.0, 2000.0, 1800.0, 1700.0, 2000.0, 2000.0, 2100.0, 1800.0, 1750.0, 2500.0, 1700.0, 1900.0, 2300.0]
-    robot_properties.servo_initial_positions = [1500.0, 1330.0, 1800.0, 1550.0, 1250.0, 1850.0, 1350.0, 1450.0, 1550.0, 1200.0, 1800.0, 1500.0, 1250.0, 1800.0]
+    # robot_properties.servo_min_positions = [800.0, 1010.0, 1300.0, 800.0, 1100.0, 1350.0, 1250.0, 1100.0, 1000.0, 540.0, 1100.0, 800.0, 600.0, 1100.0]
+    # robot_properties.servo_max_positions = [2110.0, 1550.0, 2000.0, 1800.0, 1700.0, 2000.0, 2000.0, 2100.0, 1800.0, 1750.0, 2500.0, 1700.0, 1900.0, 2300.0]
+    robot_properties.servo_min_positions = [1050.0, 750.0, 1100.0, 850.0, 1400.0, 1400.0, 500.0, 1500.0, 1500.0, 800.0, 750.0, 900.0, 750.0, 900.0]
+    robot_properties.servo_max_positions = [1800.0, 2100.0, 1800.0, 1600.0, 2100.0, 2100.0, 1000.0, 2100.0, 2200.0, 2150.0, 2150.0, 1550.0, 2150.0, 2300.0]
+    # robot_properties.servo_initial_positions = [1500.0, 1330.0, 1800.0, 1550.0, 1250.0, 1850.0, 1350.0, 1450.0, 1550.0, 1200.0, 1800.0, 1500.0, 1250.0, 1800.0]
+    robot_properties.servo_initial_positions = [1350.0, 1430.0, 1650.0, 1400.0, 1550.0, 1570.0, 890.0, 1520.0, 1580.0, 1500.0, 1450.0, 1500.0, 1450.0, 1600.0]
     robot_properties.servo_shifts = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     robot_properties.servo_easing_function = ServoEasingFunctions.EASE_IN_OUT_CUBIC
     robot_properties.servo_controller_port = '/dev/ttyS0'
@@ -70,14 +73,10 @@ def main():
 
     #for kuro
     # r_core.register_module(PMDemoKuro(robot_properties, 100))
-    # r_core.register_module(MotionLangTestKuro(robot_properties, 3000))
-    # r_core.register_module(PMCameraMediaPipe(robot_properties, 40, kp=0.08))
-    # for kuro
-    # r_core.register_module(PMDemoKuro(robot_properties, 100))
-    # r_core.register_module(MotionLangTestKuro(robot_properties, 3000))
+    r_core.register_module(MotionLangTestKuro(robot_properties, 3000))
     # r_core.register_module(PMCameraMediaPipe(robot_properties, 40, kp=0.08))
     
-    r_core.register_module(PMCameraFaceTracking(robot_properties, 20))
+    # r_core.register_module(PMCameraFaceTracking(robot_properties, 20))
 
     if debug_mode:
         r_core.register_module(PMServoControl(robot_properties, 10))
