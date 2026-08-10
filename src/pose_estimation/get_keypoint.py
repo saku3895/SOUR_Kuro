@@ -7,7 +7,9 @@ import time
 import argparse
 from collections import deque
 
+# ⚡ サブモジュールの読み込み
 from stag_net_calculation import STAGNetDynamicsEngine
+from motion_encoder import MotionLanguageEncoder
 
 JOINT_LABELS = [
     "nose", "L_eye", "R_eye", "L_ear", "R_ear",
@@ -30,7 +32,6 @@ device = dai.Device()
 fps = 60
 
 MODEL_NAME = "luxonis/yolo26-nano-pose-estimation:coco-512x288"
-MODEL_TAG = "YOLO26-NANO"
 
 class JointFilter:
     def __init__(self, window_size=3):
@@ -50,12 +51,14 @@ class JointFilter:
 
 joint_filter = JointFilter(window_size=3)
 
-# 動作切り出しエンジンの単一インスタンス化
+# ⚡ モジュールの初期化（コントローラー管理下）
 dynamics_engine = STAGNetDynamicsEngine(
-    threshold_rotation=0.002,
-    threshold_position=0.005,
-    stability_frames=3
+    threshold_rotation=0.015,
+    threshold_position=0.030,
+    min_trigger_frames=6,
+    stability_frames=8
 )
+motion_encoder = MotionLanguageEncoder()
 
 SIGNAL_WINDOW_SIZE = 60
 pos_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
@@ -196,17 +199,34 @@ with dai.Pipeline(device) as pipeline:
             pos_energy = float(np.sum(diff ** 2))
         last_joint_positions = current_frame_data.copy()
 
-        # ダイナミクス計算・トリガー判定実行
-        rot_energy = dynamics_engine.process_frame(current_frame_data)
+        # -------------------------------------------------------------
+        # ⚡ コントローラー主導のパイプライン処理フロー
+        # -------------------------------------------------------------
+        # 1. トリガーエンジンへ1フレーム入力
+        rot_energy, extracted_gesture_data = dynamics_engine.process_frame(current_frame_data)
         
+        # 2. TRIGGER OFF（動作完了）を検知した場合のみ、言語変換を実行
+        if extracted_gesture_data is not None:
+            frames, _, _ = extracted_gesture_data.shape
+            print(f"📦 【コントローラー】動作データを検知 (総フレーム数: {frames})")
+            
+            # 動作言語へ変換
+            motion_language_text = motion_encoder.encode_sequence(extracted_gesture_data)
+            
+            print("\n=== 🔤 変換された動作言語テキスト (LLM待ち受け可能) ===")
+            print(motion_language_text)
+            print("=======================================================\n")
+            
+            # 💡 将来的にLLMへ送る場合は、ここで planner.send(motion_language_text) を呼ぶだけ！
+        # -------------------------------------------------------------
+
         pos_signal_history.append(pos_energy)
         rot_signal_history.append(rot_energy)
 
-        # グラフ描画
+        # 画面描画
         graph_w, graph_h = 512, 200
         graph_img = np.zeros((graph_h, graph_w, 3), dtype=np.uint8) + 15
         
-        # トリガー状態に応じた文字表示 (緑: 静止 / 赤: 動作中)
         state_str = "TRACKING (RECORDING)" if dynamics_engine.current_state == 1 else "IDLE (WAITING)"
         state_color = (0, 0, 255) if dynamics_engine.current_state == 1 else (0, 255, 0)
         cv2.putText(graph_img, f"STATUS: {state_str}", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, state_color, 2)
