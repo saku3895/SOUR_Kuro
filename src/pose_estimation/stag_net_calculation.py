@@ -1,28 +1,33 @@
 import numpy as np
 from collections import deque
-from robot_planning import RobotTaskPlanner
 
 class STAGNetDynamicsEngine:
-    def __init__(self, threshold_rotation=0.002, threshold_position=0.005, stability_frames=3):
-        """
-        STAG-Net思想に基づく軽量ダイナミクス計算 ＆ プルプル対策付き自動トリガーステートマシン
-        """
+    def __init__(self, 
+                 threshold_rotation=0.015,     # ⚡ 閾値をアップ (0.002 → 0.015)
+                 threshold_position=0.030,     # ⚡ 閾値をアップ (0.005 → 0.030)
+                 min_trigger_frames=6,         # ⚡ 【新機能】動作開始の「溜め」判定 (約0.2秒間動きが続いたらスタート)
+                 stability_frames=8):          # ⚡ 停止判定のフレーム数 (少し長めにして誤OFFを防ぐ)
+        
         self.threshold_rotation = threshold_rotation
         self.threshold_position = threshold_position
-        self.stability_frames = stability_frames  # スムージングを入れるため、短く設定可能に（8 → 3など）
+        self.min_trigger_frames = min_trigger_frames
+        self.stability_frames = stability_frames
         
-        # ステートマシンの状態定義
-        self.current_state = 0  # 0: IDLE, 1: TRACKING
+        # ステートマシンの状態定義 (0: IDLE, 1: TRACKING)
+        self.current_state = 0
         self.gesture_buffer = []
-        self.below_threshold_counter = 0
+        
+        # カウンター類
+        self.above_threshold_counter = 0  # 動作開始用の溜めカウンター
+        self.below_threshold_counter = 0  # 動作終了用の停止カウンター
         
         # 1フレーム前のデータ保持
         self.prev_bone_vectors = {}
         self.prev_joint_positions = None
         
-        # 骨格プルプル（ジッター）対策用の移動平均バッファ (直近3フレーム)
-        self.pos_energy_queue = deque(maxlen=3)
-        self.rot_energy_queue = deque(maxlen=3)
+        # ⚡ ノイズ除去用の移動平均バッファを 3 → 10 に拡大 (カメラのゆらぎを潰す)
+        self.pos_energy_queue = deque(maxlen=10)
+        self.rot_energy_queue = deque(maxlen=10)
 
     def calculate_bone_vector(self, p, c):
         d = c - p
@@ -35,7 +40,7 @@ class STAGNetDynamicsEngine:
         if np.all(current_frame_data == 0):
             return 0.0
 
-        # --- 1. 位置エネルギーの計算 ---
+        # --- 1. 位置エネルギーの計算 (主要な腕関節) ---
         raw_position_energy = 0.0
         arm_joints = [5, 6, 7, 8, 9, 10]
         if self.prev_joint_positions is not None:
@@ -58,58 +63,57 @@ class STAGNetDynamicsEngine:
                 raw_rotation_energy += float(np.sum((curr_vec - prev_vec) ** 2))
             self.prev_bone_vectors[bone_key] = curr_vec
 
-        # 🔥 【プルプル対策①】直近3フレームの移動平均をとってノイズの突発的なトゲを潰す
+        # 直近10フレームの移動平均でノイズを滑らかにする
         self.pos_energy_queue.append(raw_position_energy)
         self.rot_energy_queue.append(raw_rotation_energy)
         
         smooth_position_energy = np.mean(self.pos_energy_queue)
         smooth_rotation_energy = np.mean(self.rot_energy_queue)
 
-        # 🔥 【プルプル対策②】ヒステリシス（閾値の動的変更）
-        # 動いている間(TRACKING)は、プルプルを「静止」と見なしやすくするために閾値を少し厳しく（高めに）する
-        if self.current_state == 1:  # TRACKING中
-            th_rot = self.threshold_rotation * 1.5  # 例: 0.002 → 0.003 に引き上げ
-            th_pos = self.threshold_position * 1.5
+        # 動作中のヒステリシス
+        if self.current_state == 1:
+            th_rot = self.threshold_rotation * 1.2
+            th_pos = self.threshold_position * 1.2
         else:
             th_rot = self.threshold_rotation
             th_pos = self.threshold_position
 
-        # 判定
+        # 「動き」があったかの判定
         is_moving = (smooth_rotation_energy > th_rot) or (smooth_position_energy > th_pos)
         
-        # --- 3. ステートマシン判定 ---
-        if self.current_state == 0:  # STATE_IDLE
+        # --- 3. ステートマシン判定 (溜め判定つき) ---
+        if self.current_state == 0:  # STATE_IDLE (待機中)
             if is_moving:
-                self.current_state = 1  # STATE_TRACKING
-                self.gesture_buffer = [current_frame_data.copy()]
-                self.below_threshold_counter = 0
-                print(f"⚡ [TRIGGER ON] 仕草検知開始! (Smooth Rot: {smooth_rotation_energy:.5f})")
+                self.above_threshold_counter += 1
+                # ⚡ 一定フレーム以上連続で動いた場合のみ TRIGGER ON
+                if self.above_threshold_counter >= self.min_trigger_frames:
+                    self.current_state = 1  # STATE_TRACKING
+                    self.gesture_buffer = [current_frame_data.copy()]
+                    self.below_threshold_counter = 0
+                    print(f"\n⚡ [TRIGGER ON] 意図的な動作を検知! (Rot: {smooth_rotation_energy:.4f}, Pos: {smooth_position_energy:.4f})")
+            else:
+                self.above_threshold_counter = 0  # 途中で動きが切れたらリセット
                 
-        elif self.current_state == 1:  # STATE_TRACKING
+        elif self.current_state == 1:  # STATE_TRACKING (記録中)
             self.gesture_buffer.append(current_frame_data.copy())
             
             if not is_moving:
                 self.below_threshold_counter += 1
-                # スムージングが効いているので、ここを短いフレーム数（例: 3フレーム＝約0.05秒）にしても誤検知しにくい
                 if self.below_threshold_counter >= self.stability_frames:
-                    print(f"🛑 [TRIGGER OFF] 仕草終了 (総フレーム数: {len(self.gesture_buffer)})")
+                    print(f"🛑 [TRIGGER OFF] 動作終了")
                     packed_data = np.array(self.gesture_buffer)
-                    self._send_to_mllm_pipeline(packed_data)
+                    
+                    self._on_gesture_extracted(packed_data)
                     
                     self.current_state = 0
                     self.gesture_buffer = []
+                    self.above_threshold_counter = 0
                     self.below_threshold_counter = 0
             else:
                 self.below_threshold_counter = 0
 
-        # get_keypoint.pyのグラフ描画用には、滑らかにしたねじれ値を返す
         return smooth_rotation_energy
 
-    def _send_to_mllm_pipeline(self, data_package):
-        print(f"🚀 [MLLM Pipeline] {data_package.shape} の動作データをパッキングしました。")
-        """
-        時系列計算が終わった塊データを、新設した robot_planning.py へバトンタッチ
-        """
-        # ここで新設した計画モジュールを呼び出す
-        planner = RobotTaskPlanner()
-        planner.generate_action_plan(data_package)
+    def _on_gesture_extracted(self, data_package):
+        frames, joints, coords = data_package.shape
+        print(f"📦 【動作切り出し成功】 総フレーム数 : {frames} (約 {frames / 30.0:.2f} 秒)\n")

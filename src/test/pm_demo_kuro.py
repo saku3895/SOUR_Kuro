@@ -6,102 +6,61 @@ import copy
 
 class KuroDemoMotionData():
 
-    # motion for 14 DoF
-    # order: [ID2, ID3, ID4, ID5, ID6, ID7, ID8, ID9, ID10, ID11, ID12, ID13, ID14, ID15]
-    # key:   [a,   d,   e,   q,   i,   m,   n,   f,   r,    h,    l,    j,    p,    t]
-
-    # motion 1
+    # Shiroの demo_motion1 の動きをKuroの数値に変換
     demo_motion1_position = [
-        [1500.0, 1330.0, 1800.0, 1550.0, 1250.0, 1850.0, 1350.0, 1450.0, 1550.0, 1200.0, 1800.0, 1500.0, 1250.0, 1800.0]
+        [1350.0, 1430.0, 1650.0, 1400.0, 1550.0, 1570.0, 890.0, 1520.0, 1580.0, 1500.0, 1450.0, 1500.0, 1450.0, 1600.0]
     ]
     demo_motion1_time = [
-        [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
+        [3000.0, 3000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
     ]
     demo_motion1_interval = [1000.0]
 
-    # motion 2
+    # Shiroの demo_motion2 の動き（ALL 500.0）をKuroの数値に変換
     demo_motion2_position = [
-        # 基本姿勢
-        [1500.0, 1330.0, 1800.0, 1550.0, 1250.0, 1850.0, 1350.0, 1450.0, 1550.0, 1200.0, 1800.0, 1500.0, 1250.0, 1800.0],
-        [1500.0, 1330.0, 1800.0, 1550.0, 1250.0, 2000.0, 1350.0, 1450.0, 1550.0, 1200.0, 1800.0, 1500.0, 1250.0, 1800.0],
-        [1800.0, 1330.0, 1800.0, 1550.0, 1250.0, 2000.0, 1350.0, 1450.0, 1550.0, 1200.0, 1800.0, 1300.0, 1250.0, 1800.0],
-        [1800.0, 1500.0, 1850.0, 1550.0, 1250.0, 2000.0, 1350.0, 1450.0, 1550.0, 550.0, 1800.0, 1300.0, 1250.0, 1800.0]
-    ]
+         [1335.0, 1375.0, 1810.0, 1375.0, 1290.0, 1630.0, 790.0, 1535.0, 1580.0, 1500.0, 1480.0, 1490.0, 1450.0, 1335.0]
+            ]
     demo_motion2_time = [
-        [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0],
-        [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0],
-        [1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0, 1500.0],
         [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
     ]
-    demo_motion2_interval = [1000.0, 1000.0, 1000.0, 5000.0]
+    demo_motion2_interval = [10.0]
 
-    # motion 3
-    # motion 3: left front leg step test
+    # Shiroの demo_motion3 の動きをKuroの数値に変換
     demo_motion3_position = [
-        # 基本姿勢
-        [1500.0, 1330.0, 1800.0, 1550.0, 1250.0, 1850.0, 1350.0, 1450.0, 1550.0, 1200.0, 1800.0, 1500.0, 1250.0, 1800.0],
-        # 左前脚だけ少し曲げる
-        [1500.0, 1330.0, 1750.0, 1550.0, 1250.0, 1850.0, 1350.0, 1500.0, 1550.0, 1300.0, 1800.0, 1500.0, 1250.0, 1800.0],
-        # 基本姿勢に戻す
-        [1500.0, 1330.0, 1800.0, 1550.0, 1250.0, 1850.0, 1350.0, 1450.0, 1550.0, 1200.0, 1800.0, 1500.0, 1250.0, 1800.0]
+        [1450.0, 1977.3, 1100.0, 943.8, 2100.0, 2100.0, 733.3, 1800.0, 1877.6, 1812.5, 1061.1, 1246.7, 925.0, 1880.0],
+        [1450.0, 1977.3, 1500.0, 943.8, 1750.0, 2100.0, 666.7, 1650.0, 1969.7, 2487.5, 1683.3, 1420.0, 1625.0, 1320.0],
+        [1450.0, 1977.3, 1100.0, 943.8, 2100.0, 2100.0, 733.3, 1800.0, 1877.6, 1812.5, 1061.1, 1246.7, 925.0, 1880.0]
     ]
-
     demo_motion3_time = [
-        [2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0],
-        [2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0],
-        [2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0, 2000.0]
+        [3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0],
+        [3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0],
+        [3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0, 3000.0]
     ]
+    demo_motion3_interval = [10.0, 3000.0, 10.0]
 
-    demo_motion3_interval = [500.0, 500.0, 1000.0]
 
-    #############
-        
     def __init__(self):
-            pass
+        pass
 
+    # sitting and look around (Shiroの設定を完全移植)
     def get_demo_motion1(self):
-        motion1 = Motion(
-            self.demo_motion1_position,
-            self.demo_motion1_time,
-            self.demo_motion1_interval,
-            loop_time=1,
-            fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM,
-            fluc_amp_motion=0,
-            fluc_amp_time=0,
-            fluc_amp_interval=0
-        )
-
-        # 首ランダム
-        # index 0 = ID2 = NECK_PHI1
-        # index 1 = ID3 = NECK_PSI2
-        motion1.set_randomizer(0, 0, 1000, 2000)
-        motion1.set_randomizer(0, 1, 1010, 1550)
-
+        motion1 = Motion(self.demo_motion1_position, self.demo_motion1_time, self.demo_motion1_interval, 
+                         loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, 
+                         fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+        
+        # 首のランダム値 (Shiro: 300~650, 400~550) をKuroのスケールに変換
+        motion1.set_randomizer(0, 0, 1250.0, 1600.0)
+        motion1.set_randomizer(0, 1, 1731.8, 2100.0)
         return motion1
 
     def get_demo_motion2(self):
-        return Motion(
-            self.demo_motion2_position,
-            self.demo_motion2_time,
-            self.demo_motion2_interval,
-            loop_time=10,
-            fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM,
-            fluc_amp_motion=0,
-            fluc_amp_time=0,
-            fluc_amp_interval=0
-        )
+        return Motion(self.demo_motion2_position, self.demo_motion2_time, self.demo_motion2_interval, 
+                      loop_time=10, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, 
+                      fluc_amp_motion=50, fluc_amp_time=10, fluc_amp_interval=1000)
 
     def get_demo_motion3(self):
-        return Motion(
-            self.demo_motion3_position,
-            self.demo_motion3_time,
-            self.demo_motion3_interval,
-            loop_time=1,
-            fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM,
-            fluc_amp_motion=0,
-            fluc_amp_time=0,
-            fluc_amp_interval=0
-        )
+        return Motion(self.demo_motion3_position, self.demo_motion3_time, self.demo_motion3_interval, 
+                      loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, 
+                      fluc_amp_motion=50, fluc_amp_time=10, fluc_amp_interval=1000)
 
 
 class PMDemoKuro(PeriodicModule):
@@ -113,51 +72,44 @@ class PMDemoKuro(PeriodicModule):
         self.demo_motion3 = KuroDemoMotionData().get_demo_motion3()
         self.next_motion_interval = 0
 
+        # 初期モーションもShiroに合わせてdemo_motion2スタートに変更
         self.current_motion = self.demo_motion1
 
     def execute_periodic_task(self, lock, data_dict):
-
-        super().execute_periodic_task(lock, data_dict)
-
-        if data_dict['servo_ready'] == True and data_dict['servo_params_updated'] == False:
-
-            if self.next_motion_interval > 0:  # interval time
-                self.next_motion_interval -= self.interval_ms
-            else:
-                if not self.current_motion.is_motion_finished():
-                    position, time, interval = self.current_motion.get_next_motion()
-
-                    self.write_servo_positions(lock, data_dict, position, time)
-
-                    self.next_motion_interval = interval
+            super().execute_periodic_task(lock, data_dict)
+    
+            #If servo_params are checked and all servos are ready, it means that previous motion is finished.
+            #If servo_ready and servo_params_updated are both True, it means that servo control has not checked servo parameters yet.
+            if data_dict['servo_ready'] == True and data_dict['servo_params_updated'] == False:
+                
+                if self.next_motion_interval > 0:#interval time
+                    self.next_motion_interval -= self.interval_ms
                 else:
-
-                    # # state transition among demo motions
-                    # if self.current_motion == self.demo_motion1:
-                    #     self.current_motion = self.demo_motion2
-                    #     print("demo_motion2")
-                    # elif self.current_motion == self.demo_motion3:
-                    #     self.current_motion = self.demo_motion2
-                    #     print("demo_motion2")
-                    # elif self.current_motion == self.demo_motion2:
-                    #     # transition to demo_motion1 in probability of 1/3,
-                    #     # demo_motion3 in probability of 1/3,
-                    #     # demo_motion2 in probability of 1/3
-                    #     if random.randint(0, 2) == 0:
-                    #         self.current_motion = self.demo_motion1
-                    #         print("demo_motion1")
-                    #     elif random.randint(0, 2) == 1:
-                    #         self.current_motion = self.demo_motion3
-                    #         print("demo_motion3")
-                    #     else:
-                    #         self.current_motion = self.demo_motion2
-                    #         print("demo_motion2")
-
-                    # self.current_motion.reset()
-                    # repeat motion1 only
-
-                    self.current_motion = self.demo_motion2
-                    print("demo_motion2")
-
-
-                    self.current_motion.reset()
+                    if not self.current_motion.is_motion_finished():
+                        position, time, interval = self.current_motion.get_next_motion()
+    
+                        self.write_servo_positions(lock, data_dict, position, time)
+    
+                        self.next_motion_interval = interval
+                    else:
+    
+                    # state transition among demo motions
+                        if self.current_motion == self.demo_motion1:
+                            self.current_motion = self.demo_motion2
+                            print("demo_motion2")
+                        elif self.current_motion == self.demo_motion3:
+                            self.current_motion = self.demo_motion2
+                            print("demo_motion2")
+                        elif self.current_motion == self.demo_motion2:
+                            # transition to demo_motion1 in probability of 1/3, demo_motion3 in probability of 1/3, demo_motion2 in probability of 1/3
+                            if random.randint(0, 2) == 0:
+                                self.current_motion = self.demo_motion1
+                                print("demo_motion1")
+                            elif random.randint(0, 2) == 1:
+                                self.current_motion = self.demo_motion3
+                                print("demo_motion3")
+                            else:
+                                self.current_motion = self.demo_motion2
+                                print("demo_motion2")
+    
+                        self.current_motion.reset()

@@ -1,4 +1,3 @@
-# get_keypoint.py
 #!/usr/bin/env python3
 
 import cv2
@@ -8,10 +7,7 @@ import time
 import argparse
 from collections import deque
 
-# 別ファイルの計算エンジンをインポート
 from stag_net_calculation import STAGNetDynamicsEngine
-# エンジンの初期化
-engine = STAGNetDynamicsEngine(threshold_rotation=0.002, stability_frames=3)
 
 JOINT_LABELS = [
     "nose", "L_eye", "R_eye", "L_ear", "R_ear",
@@ -54,15 +50,17 @@ class JointFilter:
 
 joint_filter = JointFilter(window_size=3)
 
-# 計算エンジンのインスタンス化
-dynamics_engine = STAGNetDynamicsEngine()
+# 動作切り出しエンジンの単一インスタンス化
+dynamics_engine = STAGNetDynamicsEngine(
+    threshold_rotation=0.002,
+    threshold_position=0.005,
+    stability_frames=3
+)
 
-# 📈 グラフバッファ（位置の波と、ねじれの波を別々に記録）
 SIGNAL_WINDOW_SIZE = 60
 pos_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
 rot_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
 
-# 位置変化を計算するための前フレーム保持用
 last_joint_positions = None
 
 with dai.Pipeline(device) as pipeline:
@@ -123,29 +121,21 @@ with dai.Pipeline(device) as pipeline:
         fps_smoothing_queue.append(instant_fps)
         fps_display = np.mean(fps_smoothing_queue)
 
-        # 1. カメラ映像用ウィンドウ（黒背景に骨格）
         frame_black_skeleton = np.zeros_like(frame)
-        color = (255, 0, 0)
-        
         current_frame_data = np.zeros((NUM_JOINTS, 3), dtype=np.float32)
         
-        # 🔥 【複数人対策】カメラに一番近い（Zが最も小さい）メインユーザーを見つける
         main_detection = None
         min_depth = float('inf')
         
         for detection in detections:
-            # z座標が正しく取れているか確認
             det_depth = detection.spatialCoordinates.z / 1000.0
             if 0 < det_depth < min_depth:
                 min_depth = det_depth
                 main_detection = detection
 
-        # 🔥 メインユーザー（一番手前の1人）だけを処理対象にする
         if main_detection is not None:
-            detection = main_detection  # ループではなく、選ばれた1人のみ処理
-            
+            detection = main_detection
             bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
-            cv2.putText(frame_black_skeleton, f"TARGET (Depth: {min_depth:.2f}m)", (bbox[0] + 10, bbox[1] + 20), cv2.FONT_HERSHEY_TRIPLEX, 0.5, (0, 255, 0), 1)
             cv2.rectangle(frame_black_skeleton, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
 
             keypoints = detection.getKeypoints()
@@ -155,13 +145,9 @@ with dai.Pipeline(device) as pipeline:
                 smooth_joints = {}
                 for j, keypoint in enumerate(keypoints):
                     if j >= NUM_JOINTS: break
-                    
-                    # 🔥 【AIの脳内補完対策】信頼度スコアをチェック
-                    # score または confidence の低い（見切れてAIが必死に先読みしている）関節は無視
-                    # ※ scoreが取れない場合は hasattr() で安全にフォールバックします
                     kp_score = getattr(keypoint, 'score', getattr(keypoint, 'confidence', 1.0))
                     
-                    if kp_score < 0.4:  # 信頼度40%未満は「見切れ・遮蔽」とみなして完全に捨てる
+                    if kp_score < 0.4:
                         smooth_joints[j] = (0.0, 0.0, 0.0)
                         continue
 
@@ -183,26 +169,18 @@ with dai.Pipeline(device) as pipeline:
                 for j, keypoint in enumerate(keypoints):
                     if j >= NUM_JOINTS: break
                     keypoint_pos = frameNorm(frame, (keypoint.imageCoordinates.x, keypoint.imageCoordinates.y))
-                    
-                    # 信頼度低で弾かれたものはスルー
                     if j not in smooth_joints: continue
                     sm_x, sm_y, sm_z = smooth_joints[j]
 
-                    # 🔥 関節が有効（ゼロではない）かつ、腰（ベース）が有効な場合のみ相対化する
                     if base_z > 0 and sm_z > 0:
                         norm_x = sm_x - base_x
                         norm_y = sm_y - base_y
                         norm_z = sm_z - base_z
                         current_frame_data[j] = [norm_x, norm_y, norm_z]
                     else:
-                        # 見切れている場合は、腰を引き算せずに「完全な0.0」を叩き込む
                         current_frame_data[j] = [0.0, 0.0, 0.0]
-                        norm_z = 0.0
 
                     cv2.circle(frame_black_skeleton, (keypoint_pos[0], keypoint_pos[1]), 3, (0, 255, 0), -1)
-                    rel_z_cm = int(norm_z * 100)
-                    label_text = f"({rel_z_cm:+.0f}cm)" if base_z > 0 and sm_z > 0 else "(0cm)"
-                    cv2.putText(frame_black_skeleton, label_text, (keypoint_pos[0] + 5, keypoint_pos[1] - 5), cv2.FONT_HERSHEY_TRIPLEX, 0.35, (0, 255, 0))
 
                 for edge in YOLO26_EDGES:
                     if edge[0] < len(keypoints) and edge[1] < len(keypoints):
@@ -210,54 +188,45 @@ with dai.Pipeline(device) as pipeline:
                         kp2_pos = frameNorm(frame, (keypoints[edge[1]].imageCoordinates.x, keypoints[edge[1]].imageCoordinates.y))
                         cv2.line(frame_black_skeleton, (kp1_pos[0], kp1_pos[1]), (kp2_pos[0], kp2_pos[1]), (0, 255, 0), 2)
 
-        # 💡 【純粋なXYZ位置の移動量計算】
+        # 位置エネルギー（画面表示用）
         pos_energy = 0.0
         if last_joint_positions is not None and not np.all(current_frame_data == 0):
-            # 腕の主要関節（肩・肘・手首: 5,6,7,8,9,10）の純粋なXYZ座標の移動差分
             arm_joints = [5, 6, 7, 8, 9, 10]
             diff = current_frame_data[arm_joints] - last_joint_positions[arm_joints]
             pos_energy = float(np.sum(diff ** 2))
         last_joint_positions = current_frame_data.copy()
 
-        # 💡 【STAG-Net思想：骨のねじれ・傾きエネルギー計算】
+        # ダイナミクス計算・トリガー判定実行
         rot_energy = dynamics_engine.process_frame(current_frame_data)
         
         pos_signal_history.append(pos_energy)
         rot_signal_history.append(rot_energy)
 
-        # --------------------------------------------------
-        # 📊 独立した「ダイナミクス・グラフ専用ウィンドウ」の生成
-        # --------------------------------------------------
+        # グラフ描画
         graph_w, graph_h = 512, 200
-        graph_img = np.zeros((graph_h, graph_w, 3), dtype=np.uint8) + 15 # 薄いグレー背景
+        graph_img = np.zeros((graph_h, graph_w, 3), dtype=np.uint8) + 15
         
-        # ガイドラインとテキスト
-        cv2.putText(graph_img, "Dynamics Real-time Monitor", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        cv2.putText(graph_img, "Position Energy (XYZ Move) - CYAN", (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 0), 1)
-        cv2.putText(graph_img, "STAG-Net Rotation Energy (6D Angle) - YELLOW", (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 255), 1)
+        # トリガー状態に応じた文字表示 (緑: 静止 / 赤: 動作中)
+        state_str = "TRACKING (RECORDING)" if dynamics_engine.current_state == 1 else "IDLE (WAITING)"
+        state_color = (0, 0, 255) if dynamics_engine.current_state == 1 else (0, 255, 0)
+        cv2.putText(graph_img, f"STATUS: {state_str}", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, state_color, 2)
 
         step_x = graph_w / SIGNAL_WINDOW_SIZE
         for i in range(1, len(pos_signal_history)):
             x1 = int((i - 1) * step_x)
             x2 = int(i * step_x)
             
-            # シアン線：純粋なXYZの移動量（スケール調整 *200）
             py1 = int((graph_h - 20) - (pos_signal_history[i-1] * 200))
             py2 = int((graph_h - 20) - (pos_signal_history[i] * 200))
-            
-            # 黄色線：STAG-Netの骨の角度・ねじれ変化量（スケール調整 *500）
             ry1 = int((graph_h - 20) - (rot_signal_history[i-1] * 500))
             ry2 = int((graph_h - 20) - (rot_signal_history[i] * 500))
             
-            # クリップ処理
             py1, py2 = np.clip([py1, py2], 70, graph_h - 5)
             ry1, ry2 = np.clip([ry1, ry2], 70, graph_h - 5)
 
-            cv2.line(graph_img, (x1, py1), (x2, py2), (255, 255, 0), 2)  # 位置 (シアン)
-            cv2.line(graph_img, (x1, ry1), (x2, ry2), (0, 255, 255), 2)  # ねじれ/角度 (黄色)
+            cv2.line(graph_img, (x1, py1), (x2, py2), (255, 255, 0), 1)
+            cv2.line(graph_img, (x1, ry1), (x2, ry2), (0, 255, 255), 2)
 
-        # 各ウィンドウの描画
-        cv2.putText(frame_black_skeleton, f"RUNNING [{MODEL_TAG}]", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         cv2.putText(frame_black_skeleton, f"FPS: {fps_display:.1f}", (frame.shape[1] - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         
         cv2.imshow("Skeleton Detection", frame_black_skeleton)
