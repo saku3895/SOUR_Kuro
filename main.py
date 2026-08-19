@@ -13,6 +13,8 @@ from src.test.motion_lang_test_kuro import MotionLangTestKuro
 from src.test.pm_demo_shiro import PMDemoShiro
 from src.test.pm_demo_betty import PMDemoBetty
 from src.test.pm_demo_kuro import PMDemoKuro
+from src.test.pm_motion_lang_kuro import PMMotionLanguageKuro
+
 
 
 def main():
@@ -72,10 +74,18 @@ def main():
     #r_core.register_module(PMUnitV2(robot_properties, 500))
 
     #for kuro
-    r_core.register_module(PMDemoKuro(robot_properties, 100))
+    # r_core.register_module(PMDemoKuro(robot_properties, 100))
     # r_core.register_module(MotionLangTestKuro(robot_properties, 3000))
     # r_core.register_module(PMCameraMediaPipe(robot_properties, 40, kp=0.08))
     
+    r_core.register_module(
+        PMMotionLanguageKuro(
+            robot_properties,
+            "*a4d6e4q6i6m1n1f3r3h4l4j2p4t3#",
+            100,
+        )
+    )
+
     # r_core.register_module(PMCameraFaceTracking(robot_properties, 20))
 
     if debug_mode:
