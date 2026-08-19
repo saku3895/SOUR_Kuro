@@ -55,7 +55,10 @@ class PMMotionLanguageKuro(PeriodicModule):
         return servo_positions
 
     def _read_motion_language(self):
-        print("動作言語を入力してください（例: *a4d6e4q6i6m1n1f3r3h4l4j2p4t3#）")
+        print(
+            "動作言語を入力してください（例: *a4d6e4q6i6m1n1f3r3h4l4j2p4t3#）",
+            flush=True,
+        )
         while not self.terminate:
             try:
                 motion_language_line = input("> ")
@@ -66,6 +69,7 @@ class PMMotionLanguageKuro(PeriodicModule):
 
             if motion_language_line.strip():
                 self.input_queue.put(motion_language_line)
+                print("動作言語を受信しました。サーボの準備完了を待っています。", flush=True)
 
     def _start_input_thread(self):
         if self.input_thread_started:
@@ -102,4 +106,4 @@ class PMMotionLanguageKuro(PeriodicModule):
             servo_operation_times,
         )
         self.has_written = True
-        print(f"動作言語を実行: {self.motion_language_line}")
+        print(f"動作言語を実行: {self.motion_language_line}", flush=True)
