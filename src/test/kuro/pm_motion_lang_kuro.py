@@ -1,18 +1,21 @@
 from src.control.motion_lang2motor import parse_motion_commands
 from src.core.periodic_module import PeriodicModule
 
+import queue
+import threading
+
 
 class PMMotionLanguageKuro(PeriodicModule):
     """1行のKuro動作言語を1つのモータ姿勢として実行する周期モジュール。"""
 
-    def __init__(self, robot_properties, motion_language_line, interval_ms=1000):
+    def __init__(self, robot_properties, motion_language_line=None, interval_ms=1000):
         super().__init__(interval_ms)
         self.robot_properties = robot_properties
-        self.motion_language_line = self._normalize_motion_language(
-            motion_language_line
-        )
-        self.servo_positions = self._parse_motion_language()
-        self.has_written = False
+        self.motion_language_line = motion_language_line
+        self.servo_positions = None
+        self.has_written = True
+        self.input_queue = queue.Queue()
+        self.input_thread_started = False
 
     @staticmethod
     def _normalize_motion_language(motion_language_line):
@@ -31,8 +34,11 @@ class PMMotionLanguageKuro(PeriodicModule):
         return command
 
     def _parse_motion_language(self):
+        motion_language_line = self._normalize_motion_language(
+            self.motion_language_line
+        )
         parsed_commands = parse_motion_commands(
-            ("1", [self.motion_language_line])
+            ("1", [motion_language_line])
         )
         if len(parsed_commands) != 1 or not parsed_commands[0]:
             raise ValueError("動作言語から有効なモータ指令を生成できません")
@@ -48,8 +54,40 @@ class PMMotionLanguageKuro(PeriodicModule):
 
         return servo_positions
 
+    def _read_motion_language(self):
+        print("動作言語を入力してください（例: *a4d6e4q6i6m1n1f3r3h4l4j2p4t3#）")
+        while not self.terminate:
+            try:
+                motion_language_line = input("> ")
+            except EOFError:
+                return
+            except KeyboardInterrupt:
+                return
+
+            if motion_language_line.strip():
+                self.input_queue.put(motion_language_line)
+
+    def _start_input_thread(self):
+        if self.input_thread_started:
+            return
+
+        self.input_thread_started = True
+        threading.Thread(target=self._read_motion_language, daemon=True).start()
+
+    def _load_next_motion(self):
+        try:
+            self.motion_language_line = self.input_queue.get_nowait()
+            self.servo_positions = self._parse_motion_language()
+            self.has_written = False
+        except queue.Empty:
+            return
+        except (TypeError, ValueError) as error:
+            print(f"動作言語を受け付けられません: {error}")
+
     def execute_periodic_task(self, lock, data_dict):
         super().execute_periodic_task(lock, data_dict)
+        self._start_input_thread()
+        self._load_next_motion()
 
         if self.has_written or not data_dict["servo_ready"]:
             return
@@ -65,6 +103,3 @@ class PMMotionLanguageKuro(PeriodicModule):
         )
         self.has_written = True
         print(f"動作言語を実行: {self.motion_language_line}")
-
-
-from src.test.pm_motion_lang_kuro import PMMotionLanguageKuro

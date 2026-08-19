@@ -9,11 +9,11 @@ from src.modules.pm_camera_face_tracking import PMCameraFaceTracking
 
 from src.test.pm_test_shiro import PMTestShiro
 from src.test.motion_lang_test_shiro import MotionLangTestShiro
-from src.test.motion_lang_test_kuro import MotionLangTestKuro
+from src.test.kuro.motion_lang_test_kuro import MotionLangTestKuro
 from src.test.pm_demo_shiro import PMDemoShiro
 from src.test.pm_demo_betty import PMDemoBetty
-from src.test.pm_demo_kuro import PMDemoKuro
-from src.test.pm_motion_lang_kuro import PMMotionLanguageKuro
+from src.test.kuro.pm_demo_kuro import PMDemoKuro
+from src.test.kuro.pm_motion_lang_kuro import PMMotionLanguageKuro
 
 
 
@@ -81,8 +81,7 @@ def main():
     r_core.register_module(
         PMMotionLanguageKuro(
             robot_properties,
-            "*a4d6e4q6i6m1n1f3r3h4l4j2p4t3#",
-            100,
+            interval_ms=100,
         )
     )
 
