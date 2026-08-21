@@ -5,11 +5,23 @@ from src.core.periodic_module import PeriodicModule
 class PMMotionLanguageKuro(PeriodicModule):
     """1行の動作言語または複数姿勢列を、姿勢1→姿勢2→...として実行する。"""
 
-    def __init__(self, robot_properties, motion_language_line="*a4d6e4q6i6m1n1f3r3h4l4j2p4t3#", interval_ms=1000):
+    def __init__(
+        self,
+        robot_properties,
+        motion_language_line="*a4d6e4q6i6m1n1f3r3h4l4j2p4t3#",
+        interval_ms=1000,
+        pose_hold_ms=2000,
+        default_pose=None,
+    ):
         super().__init__(interval_ms)
         self.robot_properties = robot_properties
+        self.pose_hold_ms = max(0, int(pose_hold_ms))
+        self.pose_hold_remaining_ms = 0
 
         self.motion_languages = self._prepare_motion_languages(motion_language_line)
+        if default_pose is not None:
+            self.motion_languages = [self._normalize_motion_language(default_pose)] + self.motion_languages
+
         self.pose_index = 0
         self.current_motion_language = self.motion_languages[0]
         self.servo_positions = self._parse_motion_language(self.current_motion_language)
@@ -74,11 +86,15 @@ class PMMotionLanguageKuro(PeriodicModule):
             return
 
         if self.has_written:
+            if self.pose_hold_remaining_ms > 0:
+                self.pose_hold_remaining_ms = max(0, self.pose_hold_remaining_ms - self.interval_ms)
+                return
             self.has_written = False
 
         next_motion = self._next_pose()
         if next_motion is None:
             print("動作言語の列を完了しました", flush=True)
+            self.pose_hold_remaining_ms = 0
             return
 
         servo_operation_times = [1000.0] * self.robot_properties.num_servos
@@ -89,10 +105,12 @@ class PMMotionLanguageKuro(PeriodicModule):
             servo_operation_times,
         )
         self.has_written = True
+        self.pose_hold_remaining_ms = self.pose_hold_ms
         print(f"動作言語を実行: {next_motion}", flush=True)
 
     def reset(self):
         self.pose_index = 0
         self.has_written = False
+        self.pose_hold_remaining_ms = 0
         self.current_motion_language = self.motion_languages[0]
         self.servo_positions = self._parse_motion_language(self.current_motion_language)
