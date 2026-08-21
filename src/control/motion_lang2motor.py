@@ -118,7 +118,7 @@ def parse_motion_commands(input_data):
 # 使用例
 if __name__ == "__main__":
     # テスト用のデータ
-    test_data = ('20', ['*a5d6e4q6i6m4n7f0r8h5l2j1p4t5#'])
+    test_data = ('20', ['*a5d6e4q6i6m4n7f0r8h4l4j1p4t4#'])
 
     print(f"入力データ: {test_data}")
     results = parse_motion_commands(test_data)
