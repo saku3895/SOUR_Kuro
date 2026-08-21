@@ -81,7 +81,12 @@ def main():
     r_core.register_module(
         PMMotionLanguageKuro(
             robot_properties,
-            "*a4d6e4q6i6m1n1f3r3h4l4j2p4t3#",
+            [
+                "*a5d6e4q6i6m4n7f0r8h4l4j1p4t4#",
+                "*a7d7e4q6i6m4n7f0r8h4l4j1p4t4#",
+                "*a7d7e4q6i6m4n7f0r8h4l4j1p4t4#",
+                "*a5d6e4q6i6m4n7f0r8h4l4j1p4t4#"
+            ],
             100,
         )
     )
