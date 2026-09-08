@@ -25,8 +25,6 @@ class STAGNetDynamicsEngine:
         
         self.pos_energy_queue = deque(maxlen=10)
         self.rot_energy_queue = deque(maxlen=10)
-        self.last_position_energy = 0.0
-        self.last_rotation_energy = 0.0
 
     def calculate_bone_vector(self, p, c):
         d = c - p
@@ -43,8 +41,6 @@ class STAGNetDynamicsEngine:
         extracted_data = None
 
         if np.all(current_frame_data == 0):
-            self.last_position_energy = 0.0
-            self.last_rotation_energy = 0.0
             return 0.0, None
 
         # 1. 位置エネルギー
@@ -75,8 +71,6 @@ class STAGNetDynamicsEngine:
         
         smooth_position_energy = np.mean(self.pos_energy_queue)
         smooth_rotation_energy = np.mean(self.rot_energy_queue)
-        self.last_position_energy = float(smooth_position_energy)
-        self.last_rotation_energy = float(smooth_rotation_energy)
 
         # 閾値ヒステリシス
         if self.current_state == 1:

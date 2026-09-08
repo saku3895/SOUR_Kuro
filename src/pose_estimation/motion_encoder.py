@@ -1,70 +1,51 @@
 import numpy as np
 
-
 class MotionLanguageEncoder:
     def __init__(self):
-        self.angle_labels = (
-            ("neck_angle_deg", "NK"),
-            ("left_shoulder_angle_deg", "LS"),
-            ("right_shoulder_angle_deg", "RS"),
-            ("left_elbow_angle_deg", "LE"),
-            ("right_elbow_angle_deg", "RE"),
-            ("left_hip_angle_deg", "LH"),
-            ("right_hip_angle_deg", "RH"),
-            ("left_knee_angle_deg", "LK"),
-            ("right_knee_angle_deg", "RK"),
-            ("head_pitch_deg", "HP"),
-            ("head_roll_deg", "HR"),
-            ("head_yaw_deg", "HY"),
-        )
-        self.angle_bounds = (0.0, 180.0)
-        self.orientation_bounds = (-180.0, 180.0)
+        self.target_joints = [
+            (0, 'a'), (5, 'b'), (6, 'c'), (7, 'd'), (8, 'e'), (9, 'f'), (10, 'g')
+        ]
+        self.bounds_x = (-0.8, 0.8)
+        self.bounds_y = (-0.6, 0.8)  # ⚡ 上がプラス(+0.8m)、下がマイナス(-0.6m)
+        self.bounds_z = (-0.8, 0.8)
 
     def _quantize_value(self, val, bounds):
         min_v, max_v = bounds
-        if not np.isfinite(val):
-            return "xx"
-        normalized = (np.clip(val, min_v, max_v) - min_v) / (max_v - min_v)
-        return f"{int(normalized * 99.99):02d}"
+        norm = (np.clip(val, min_v, max_v) - min_v) / (max_v - min_v)
+        return int(norm * 9.99)
 
-    def encode_frame(self, angle_frame):
-        """Encode one frame from the angle-series dictionary."""
+    def encode_frame(self, frame_data):
         tokens = []
-        for name, label in self.angle_labels:
-            value = angle_frame.get(name, np.nan)
-            bounds = self.orientation_bounds if name.startswith("head_") else self.angle_bounds
-            tokens.append(f"{label}{self._quantize_value(value, bounds)}")
+        for j_idx, label in self.target_joints:
+            x, y, z = frame_data[j_idx]
+            if x == 0.0 and y == 0.0 and z == 0.0:
+                qx, qy, qz = 5, 5, 5
+            else:
+                qx = self._quantize_value(x, self.bounds_x)
+                
+                # ⚡ カメラのY（下向き）を反転させて「上がプラス」の高さにする
+                qy = self._quantize_value(-y, self.bounds_y)
+                
+                qz = self._quantize_value(z, self.bounds_z)
+            tokens.append(f"{label}{qx}{qy}{qz}")
         return f"*{''.join(tokens)}#"
 
-    def encode_sequence(self, angle_series):
-        """Encode a dict of one-dimensional angle arrays into motion language."""
-        missing = [name for name, _ in self.angle_labels if name not in angle_series]
-        if missing:
-            raise ValueError(f"missing angle series: {', '.join(missing)}")
-        lengths = {len(angle_series[name]) for name, _ in self.angle_labels}
-        if len(lengths) != 1:
-            raise ValueError("all angle series must have the same number of frames")
-        num_frames = lengths.pop()
+    def encode_sequence(self, data_package):
+        num_frames = data_package.shape[0]
         motion_language_lines = []
         for f_idx in range(num_frames):
-            angle_frame = {
-                name: angle_series[name][f_idx]
-                for name, _ in self.angle_labels
-            }
-            frame_str = self.encode_frame(angle_frame)
+            frame_str = self.encode_frame(data_package[f_idx])
             motion_language_lines.append(f"t={f_idx+1:02d}: {frame_str}")
         return "\n".join(motion_language_lines)
 
 
 # --- 🧪 動作確認テスト用コード ---
 if __name__ == "__main__":
-    dummy_angles = {
-        name: np.random.uniform(0.0, 180.0, size=10)
-        for name, _ in MotionLanguageEncoder().angle_labels
-    }
+    # ダミーデータ生成: 10フレーム分、17関節、3次元座標
+    dummy_data = np.random.uniform(-0.5, 0.5, size=(10, 17, 3))
     
     encoder = MotionLanguageEncoder()
-    result_text = encoder.encode_sequence(dummy_angles)
+    result_text = encoder.encode_sequence(dummy_data)
     
     print("=== 変換された動作言語データ（LLMに入力する文字列） ===")
     print(result_text)

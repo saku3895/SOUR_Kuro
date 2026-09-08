@@ -5,12 +5,11 @@ import depthai as dai
 import numpy as np
 import time
 import argparse
-from pathlib import Path
 from collections import deque
 
 # ⚡ サブモジュールの読み込み
 from stag_net_calculation import STAGNetDynamicsEngine
-from calculate_joint_angles_csv import write_angle_csv_from_array
+from motion_encoder import MotionLanguageEncoder
 
 JOINT_LABELS = [
     "nose", "L_eye", "R_eye", "L_ear", "R_ear",
@@ -27,12 +26,6 @@ YOLO26_EDGES = [
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--depthSource", type=str, default="stereo", choices=["stereo", "neural"])
-parser.add_argument(
-    "--output-dir",
-    type=Path,
-    default=Path(__file__).resolve().parents[2] / "data_logs" / "angles",
-    help="動作ごとの関節角度CSVの保存先",
-)
 args = parser.parse_args()
 
 device = dai.Device()
@@ -65,9 +58,13 @@ dynamics_engine = STAGNetDynamicsEngine(
     min_trigger_frames=6,
     stability_frames=8
 )
+motion_encoder = MotionLanguageEncoder()
+
 SIGNAL_WINDOW_SIZE = 60
 pos_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
 rot_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
+
+last_joint_positions = None
 
 with dai.Pipeline(device) as pipeline:
     cameraNode = pipeline.create(dai.node.Camera).build(sensorFps=fps)
@@ -110,7 +107,6 @@ with dai.Pipeline(device) as pipeline:
 
     frame = None
     detections = []
-    gesture_count = 0
 
     def frameNorm(frame, bbox):
         normVals = np.full(len(bbox), frame.shape[0])
@@ -118,7 +114,7 @@ with dai.Pipeline(device) as pipeline:
         return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
 
     def process_and_display(frame, detections):
-        global last_frame_time, fps_display, gesture_count
+        global last_frame_time, fps_display, last_joint_positions
 
         current_time = time.monotonic()
         frame_interval = current_time - last_frame_time
@@ -195,6 +191,14 @@ with dai.Pipeline(device) as pipeline:
                         kp2_pos = frameNorm(frame, (keypoints[edge[1]].imageCoordinates.x, keypoints[edge[1]].imageCoordinates.y))
                         cv2.line(frame_black_skeleton, (kp1_pos[0], kp1_pos[1]), (kp2_pos[0], kp2_pos[1]), (0, 255, 0), 2)
 
+        # 位置エネルギー（画面表示用）
+        pos_energy = 0.0
+        if last_joint_positions is not None and not np.all(current_frame_data == 0):
+            arm_joints = [5, 6, 7, 8, 9, 10]
+            diff = current_frame_data[arm_joints] - last_joint_positions[arm_joints]
+            pos_energy = float(np.sum(diff ** 2))
+        last_joint_positions = current_frame_data.copy()
+
         # -------------------------------------------------------------
         # ⚡ コントローラー主導のパイプライン処理フロー
         # -------------------------------------------------------------
@@ -205,21 +209,18 @@ with dai.Pipeline(device) as pipeline:
         if extracted_gesture_data is not None:
             frames, _, _ = extracted_gesture_data.shape
             print(f"📦 【コントローラー】動作データを検知 (総フレーム数: {frames})")
-
-            gesture_count += 1
-            args.output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = args.output_dir / (
-                f"motion_angles_{time.strftime('%Y%m%d_%H%M%S')}_{gesture_count:03d}.csv"
-            )
-            write_angle_csv_from_array(
-                extracted_gesture_data,
-                output_path,
-                median_window=3,
-            )
-            print(f"関節角度CSVを保存: {output_path}")
+            
+            # 動作言語へ変換
+            motion_language_text = motion_encoder.encode_sequence(extracted_gesture_data)
+            
+            print("\n=== 🔤 変換された動作言語テキスト (LLM待ち受け可能) ===")
+            print(motion_language_text)
+            print("=======================================================\n")
+            
+            # 💡 将来的にLLMへ送る場合は、ここで planner.send(motion_language_text) を呼ぶだけ！
         # -------------------------------------------------------------
 
-        pos_signal_history.append(dynamics_engine.last_position_energy)
+        pos_signal_history.append(pos_energy)
         rot_signal_history.append(rot_energy)
 
         # 画面描画
