@@ -5,12 +5,12 @@ import depthai as dai
 import numpy as np
 import time
 import argparse
+from pathlib import Path
 from collections import deque
 
 # ⚡ サブモジュールの読み込み
 from stag_net_calculation import STAGNetDynamicsEngine
-from calculate_joint_angles_csv import calculate_pose_angles
-from motion_encoder import MotionLanguageEncoder
+from calculate_joint_angles_csv import write_angle_csv_from_array
 
 JOINT_LABELS = [
     "nose", "L_eye", "R_eye", "L_ear", "R_ear",
@@ -27,6 +27,12 @@ YOLO26_EDGES = [
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--depthSource", type=str, default="stereo", choices=["stereo", "neural"])
+parser.add_argument(
+    "--output-dir",
+    type=Path,
+    default=Path(__file__).resolve().parents[2] / "data_logs" / "angles",
+    help="動作ごとの関節角度CSVの保存先",
+)
 args = parser.parse_args()
 
 device = dai.Device()
@@ -59,8 +65,6 @@ dynamics_engine = STAGNetDynamicsEngine(
     min_trigger_frames=6,
     stability_frames=8
 )
-motion_encoder = MotionLanguageEncoder()
-
 SIGNAL_WINDOW_SIZE = 60
 pos_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
 rot_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
@@ -106,6 +110,7 @@ with dai.Pipeline(device) as pipeline:
 
     frame = None
     detections = []
+    gesture_count = 0
 
     def frameNorm(frame, bbox):
         normVals = np.full(len(bbox), frame.shape[0])
@@ -113,7 +118,7 @@ with dai.Pipeline(device) as pipeline:
         return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
 
     def process_and_display(frame, detections):
-        global last_frame_time, fps_display
+        global last_frame_time, fps_display, gesture_count
 
         current_time = time.monotonic()
         frame_interval = current_time - last_frame_time
@@ -201,26 +206,17 @@ with dai.Pipeline(device) as pipeline:
             frames, _, _ = extracted_gesture_data.shape
             print(f"📦 【コントローラー】動作データを検知 (総フレーム数: {frames})")
 
-            # 動作完了時にだけ角度を計算し、フレームごとの計算負荷を避ける
-            pose_angles = calculate_pose_angles(extracted_gesture_data, median_window=3)
-            print(
-                "関節角度を計算: "
-                f"左肘={pose_angles['left_elbow_angle_deg'][-1]:.1f} deg, "
-                f"右肘={pose_angles['right_elbow_angle_deg'][-1]:.1f} deg, "
-                f"頭部(P/R/Y)="
-                f"({pose_angles['head_pitch_deg'][-1]:.1f}, "
-                f"{pose_angles['head_roll_deg'][-1]:.1f}, "
-                f"{pose_angles['head_yaw_deg'][-1]:.1f})"
+            gesture_count += 1
+            args.output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = args.output_dir / (
+                f"motion_angles_{time.strftime('%Y%m%d_%H%M%S')}_{gesture_count:03d}.csv"
             )
-            
-            # 関節角度を動作言語へ変換
-            motion_language_text = motion_encoder.encode_sequence(pose_angles)
-            
-            print("\n=== 🔤 変換された動作言語テキスト (LLM待ち受け可能) ===")
-            print(motion_language_text)
-            print("=======================================================\n")
-            
-            # 💡 将来的にLLMへ送る場合は、ここで planner.send(motion_language_text) を呼ぶだけ！
+            write_angle_csv_from_array(
+                extracted_gesture_data,
+                output_path,
+                median_window=3,
+            )
+            print(f"関節角度CSVを保存: {output_path}")
         # -------------------------------------------------------------
 
         pos_signal_history.append(dynamics_engine.last_position_energy)

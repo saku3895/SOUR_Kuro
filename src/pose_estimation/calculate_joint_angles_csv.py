@@ -231,6 +231,21 @@ def write_angle_csv(input_path: str | Path, output_path: str | Path,
             writer.writerow(row)
 
 
+def write_angle_csv_from_array(points: np.ndarray, output_path: str | Path,
+                               median_window: int = 3) -> None:
+    """Write calculated angles from camera pose data to a CSV file."""
+    angles = calculate_pose_angles(points, median_window)
+    fieldnames = list(angles)
+    with Path(output_path).open("w", newline="", encoding="utf-8") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fieldnames)
+        writer.writeheader()
+        for index in range(len(points)):
+            writer.writerow({
+                name: "" if math.isnan(values[index]) else f"{values[index]:.3f}"
+                for name, values in angles.items()
+            })
+
+
 def main(arguments: Iterable[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Calculate joint angles from a 17-point pose CSV")
     parser.add_argument("input_csv", type=Path)
