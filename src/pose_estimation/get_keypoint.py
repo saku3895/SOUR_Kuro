@@ -5,18 +5,22 @@ import depthai as dai
 import numpy as np
 import time
 import argparse
+import csv
+from datetime import datetime
 from collections import deque
+from pathlib import Path
 
-# ⚡ サブモジュールの読み込み
-from stag_net_calculation import STAGNetDynamicsEngine
-from motion_encoder import MotionLanguageEncoder
+try:
+    from .calculate_joint_angles_array import (
+        OUTPUT_JOINTS,
+        calculate_joint_angles,
+    )
+    from .motion_trigger import MotionTriggerEngine
+except ImportError:
+    from calculate_joint_angles_array import OUTPUT_JOINTS, calculate_joint_angles
+    from motion_trigger import MotionTriggerEngine
 
-JOINT_LABELS = [
-    "nose", "L_eye", "R_eye", "L_ear", "R_ear",
-    "L_shoulder", "R_shoulder", "L_elbow", "R_elbow", "L_wrist", "R_wrist",
-    "L_hip", "R_hip", "L_knee", "R_knee", "L_ankle", "R_ankle"
-]
-NUM_JOINTS = len(JOINT_LABELS)
+NUM_JOINTS = 17
 
 YOLO26_EDGES = [
     (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6), (5, 6),
@@ -52,19 +56,34 @@ class JointFilter:
 joint_filter = JointFilter(window_size=3)
 
 # ⚡ モジュールの初期化（コントローラー管理下）
-dynamics_engine = STAGNetDynamicsEngine(
-    threshold_rotation=0.015,
-    threshold_position=0.030,
+motion_trigger = MotionTriggerEngine(
+    threshold_energy=4.0,
+    release_threshold=2.0,
     min_trigger_frames=6,
-    stability_frames=8
+    stability_frames=8,
 )
-motion_encoder = MotionLanguageEncoder()
 
 SIGNAL_WINDOW_SIZE = 60
-pos_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
-rot_signal_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
+angle_energy_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
 
-last_joint_positions = None
+
+def save_angle_sequence_csv(angle_sequence):
+    """Save one completed angle sequence in the temporary CSV format."""
+    output_dir = Path(__file__).resolve().parents[2] / "data_logs" / "angles"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    output_path = output_dir / f"motion_angles_{timestamp}.csv"
+    headers = ["frame"]
+    for joint in OUTPUT_JOINTS:
+        headers.extend(f"{joint}_{axis.lower()}" for axis in ("Pitch", "Roll", "Yaw"))
+
+    with output_path.open("w", newline="") as csv_file:
+        writer = csv.writer(csv_file)
+        writer.writerow(headers)
+        for frame_index, frame_angles in enumerate(angle_sequence):
+            writer.writerow([frame_index, *frame_angles.reshape(-1)])
+
+    return output_path
 
 with dai.Pipeline(device) as pipeline:
     cameraNode = pipeline.create(dai.node.Camera).build(sensorFps=fps)
@@ -114,7 +133,7 @@ with dai.Pipeline(device) as pipeline:
         return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
 
     def process_and_display(frame, detections):
-        global last_frame_time, fps_display, last_joint_positions
+        global last_frame_time, fps_display
 
         current_time = time.monotonic()
         frame_interval = current_time - last_frame_time
@@ -191,66 +210,61 @@ with dai.Pipeline(device) as pipeline:
                         kp2_pos = frameNorm(frame, (keypoints[edge[1]].imageCoordinates.x, keypoints[edge[1]].imageCoordinates.y))
                         cv2.line(frame_black_skeleton, (kp1_pos[0], kp1_pos[1]), (kp2_pos[0], kp2_pos[1]), (0, 255, 0), 2)
 
-        # 位置エネルギー（画面表示用）
-        pos_energy = 0.0
-        if last_joint_positions is not None and not np.all(current_frame_data == 0):
-            arm_joints = [5, 6, 7, 8, 9, 10]
-            diff = current_frame_data[arm_joints] - last_joint_positions[arm_joints]
-            pos_energy = float(np.sum(diff ** 2))
-        last_joint_positions = current_frame_data.copy()
+        angle_energy = 0.0
+        extracted_angle_sequence = None
+        try:
+            angle_frame = calculate_joint_angles(
+                current_frame_data[np.newaxis, ...]
+            )[0]
+            angle_energy, extracted_angle_sequence = motion_trigger.process_frame(
+                angle_frame
+            )
+        except (TypeError, ValueError):
+            # 見切れや欠損で姿勢を構成できないフレームは状態を変更しない。
+            pass
 
-        # -------------------------------------------------------------
-        # ⚡ コントローラー主導のパイプライン処理フロー
-        # -------------------------------------------------------------
-        # 1. トリガーエンジンへ1フレーム入力
-        rot_energy, extracted_gesture_data = dynamics_engine.process_frame(current_frame_data)
-        
-        # 2. TRIGGER OFF（動作完了）を検知した場合のみ、言語変換を実行
-        if extracted_gesture_data is not None:
-            frames, _, _ = extracted_gesture_data.shape
-            print(f"📦 【コントローラー】動作データを検知 (総フレーム数: {frames})")
-            
-            # 動作言語へ変換
-            motion_language_text = motion_encoder.encode_sequence(extracted_gesture_data)
-            
-            print("\n=== 🔤 変換された動作言語テキスト (LLM待ち受け可能) ===")
-            print(motion_language_text)
-            print("=======================================================\n")
-            
-            # 💡 将来的にLLMへ送る場合は、ここで planner.send(motion_language_text) を呼ぶだけ！
-        # -------------------------------------------------------------
+        if extracted_angle_sequence is not None:
+            # TODO: 動作確認用の過渡的なCSV保存機能（エンコーダー実装時に削除予定）
+            output_path = save_angle_sequence_csv(extracted_angle_sequence)
+            print(
+                f"動作データを保存しました: {output_path} "
+                f"(フレーム数: {extracted_angle_sequence.shape[0]})"
+            )
+            # TODO: motion_encoder への角度配列連携は仕様確定後に実装する。
 
-        pos_signal_history.append(pos_energy)
-        rot_signal_history.append(rot_energy)
+        angle_energy_history.append(angle_energy)
 
         # 画面描画
         graph_w, graph_h = 512, 200
         graph_img = np.zeros((graph_h, graph_w, 3), dtype=np.uint8) + 15
         
-        state_str = "TRACKING (RECORDING)" if dynamics_engine.current_state == 1 else "IDLE (WAITING)"
-        state_color = (0, 0, 255) if dynamics_engine.current_state == 1 else (0, 255, 0)
+        state_str = "TRACKING (RECORDING)" if motion_trigger.current_state == 1 else "IDLE (WAITING)"
+        state_color = (0, 0, 255) if motion_trigger.current_state == 1 else (0, 255, 0)
         cv2.putText(graph_img, f"STATUS: {state_str}", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, state_color, 2)
 
         step_x = graph_w / SIGNAL_WINDOW_SIZE
-        for i in range(1, len(pos_signal_history)):
+        for i in range(1, len(angle_energy_history)):
             x1 = int((i - 1) * step_x)
             x2 = int(i * step_x)
             
-            py1 = int((graph_h - 20) - (pos_signal_history[i-1] * 200))
-            py2 = int((graph_h - 20) - (pos_signal_history[i] * 200))
-            ry1 = int((graph_h - 20) - (rot_signal_history[i-1] * 500))
-            ry2 = int((graph_h - 20) - (rot_signal_history[i] * 500))
-            
-            py1, py2 = np.clip([py1, py2], 70, graph_h - 5)
-            ry1, ry2 = np.clip([ry1, ry2], 70, graph_h - 5)
+            energy_y1 = int((graph_h - 20) - (angle_energy_history[i-1] * 20))
+            energy_y2 = int((graph_h - 20) - (angle_energy_history[i] * 20))
+            energy_y1, energy_y2 = np.clip(
+                [energy_y1, energy_y2], 70, graph_h - 5
+            )
 
-            cv2.line(graph_img, (x1, py1), (x2, py2), (255, 255, 0), 1)
-            cv2.line(graph_img, (x1, ry1), (x2, ry2), (0, 255, 255), 2)
+            cv2.line(
+                graph_img,
+                (x1, energy_y1),
+                (x2, energy_y2),
+                (0, 255, 255),
+                2,
+            )
 
         cv2.putText(frame_black_skeleton, f"FPS: {fps_display:.1f}", (frame.shape[1] - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
         
         cv2.imshow("Skeleton Detection", frame_black_skeleton)
-        cv2.imshow("STAG-Net Dynamics Monitor", graph_img)
+        cv2.imshow("Motion Trigger Monitor", graph_img)
 
     while pipeline.isRunning():
         inRgb = qRgb.tryGet()
