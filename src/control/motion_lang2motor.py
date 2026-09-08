@@ -34,14 +34,14 @@ def parse_motion_commands(input_data):
         'q': {'motor_id': 5, 'range': (1600, 850), 'input_range': (5, 9)},
         'i': {'motor_id': 6, 'range': (1400, 2100), 'input_range': (5, 9)},
         'm': {'motor_id': 7, 'range': (2100, 1400), 'input_range': (0, 5)},
-        'n': {'motor_id': 8, 'range': (500, 1000), 'input_range': (0, 9)},
+        'n': {'motor_id': 8, 'range': (1000, 500), 'input_range': (0, 9)},
         'f': {'motor_id': 9, 'range': (1500, 2100), 'input_range': (0, 9)},
-        'r': {'motor_id': 10, 'range': (2200, 1500), 'input_range': (0, 9)},
+        'r': {'motor_id': 10, 'range': (1500, 2200), 'input_range': (0, 9)},
         'h': {'motor_id': 11, 'range': (800, 2150), 'input_range': (2, 7)},
         'l': {'motor_id': 12, 'range': (2150, 750), 'input_range': (2, 7)},
         'j': {'motor_id': 13, 'range': (1550, 900), 'input_range': (0, 9)},
         'p': {'motor_id': 14, 'range': (750, 2150), 'input_range': (2, 7)},
-        't': {'motor_id': 15, 'range': (2300, 900), 'input_range': (2, 7)}
+        't': {'motor_id': 15, 'range': (900, 2300), 'input_range': (2, 7)}
     }
 
     def calculate_motor_value(key, input_value):
@@ -118,7 +118,7 @@ def parse_motion_commands(input_data):
 # 使用例
 if __name__ == "__main__":
     # テスト用のデータ
-    test_data = ('20', ['*a5d6e4q6i6m4n7f0r8h4l4j1p4t4#'])
+    test_data = ('20', ['*a5d6e4q6i6m4n7f0r8h5l2j1p4t5#'])
 
     print(f"入力データ: {test_data}")
     results = parse_motion_commands(test_data)
