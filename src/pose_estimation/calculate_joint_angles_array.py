@@ -5,7 +5,7 @@ Input format:
 
 The 17 points must follow the standard COCO order exposed by
 :const:`COCO_JOINTS`.  The return value is a numeric array with shape
-``(frames, 15, 3)``.  Its last axis is ``[Pitch, Roll, Yaw]`` in degrees and
+``(frames, 15, 3)``.  Its last axis is ``[Roll, Pitch, Yaw]`` in degrees and
 its middle axis follows :const:`OUTPUT_JOINTS`.
 """
 
@@ -171,15 +171,15 @@ def _named_points(frame):
 
 
 def _euler_zxy(rotation):
-    """Decompose Rz @ Rx @ Ry and return [Pitch, Roll, Yaw] in degrees."""
+    """Decompose Rz @ Rx @ Ry and return [Roll, Pitch, Yaw] in degrees."""
     # This is the same Z-X-Y decomposition used by the original utils.py.
-    yaw = np.arctan2(-rotation[0, 1], rotation[1, 1])
-    roll = np.arctan2(-rotation[2, 0], rotation[2, 2])
+    roll = np.arctan2(-rotation[0, 1], rotation[1, 1])
     pitch = np.arctan2(
         rotation[2, 1],
         np.sqrt(rotation[2, 0] ** 2 + rotation[2, 2] ** 2),
     )
-    return np.degrees([pitch, roll, yaw])
+    yaw = np.arctan2(-rotation[2, 0], rotation[2, 2])
+    return np.degrees([roll, pitch, yaw])
 
 
 def _joint_frames(points):
@@ -220,7 +220,7 @@ def calculate_joint_angles(keypoints: np.ndarray) -> np.ndarray:
     Returns:
         A floating-point NumPy array with shape ``(frames, 15, 3)``.  The
         middle axis follows ``OUTPUT_JOINTS`` and the last axis is
-        ``[Pitch, Roll, Yaw]`` in degrees.  Euler angles use the existing
+        ``[Roll, Pitch, Yaw]`` in degrees.  Euler angles use the existing
         ``Rz @ Rx @ Ry`` (Z-X-Y) convention.
 
     Raises:

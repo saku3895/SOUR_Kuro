@@ -75,7 +75,7 @@ def save_angle_sequence_csv(angle_sequence):
     output_path = output_dir / f"motion_angles_{timestamp}.csv"
     headers = ["frame"]
     for joint in OUTPUT_JOINTS:
-        headers.extend(f"{joint}_{axis.lower()}" for axis in ("Pitch", "Roll", "Yaw"))
+        headers.extend(f"{joint}_{axis.lower()}" for axis in ("Roll", "Pitch", "Yaw"))
 
     with output_path.open("w", newline="") as csv_file:
         writer = csv.writer(csv_file)
