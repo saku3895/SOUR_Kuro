@@ -5,8 +5,13 @@ from collections import deque
 import numpy as np
 
 
+UPPER_BODY_INDICES = np.array([0, 1, 3, 4, 6, 7])
+# 下半身も検知対象に戻すときは、以下のインデックスを追加する。
+# UPPER_BODY_INDICES = np.array([0, 1, 3, 4, 6, 7, 9, 10, 12, 13])
+
+
 class MotionTriggerEngine:
-    """Track angle motion and return completed ``(frames, 15, 3)`` sequences."""
+    """Track upper-body motion in full ``(15, 3)`` angle frames."""
 
     IDLE = 0
     TRACKING = 1
@@ -66,7 +71,8 @@ class MotionTriggerEngine:
             return 0.0, None
 
         difference = self._angle_difference(angles, self.previous_angles)
-        raw_energy = float(np.mean(difference ** 2))
+        upper_body_difference = difference[UPPER_BODY_INDICES]
+        raw_energy = float(np.mean(upper_body_difference ** 2))
         self.previous_angles = angles.copy()
         self.energy_history.append(raw_energy)
         smoothed_energy = float(np.mean(self.energy_history))

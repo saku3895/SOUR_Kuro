@@ -12,13 +12,19 @@ DEFAULT_JOINT_INDICES = {
     "D": 4,  # L_elbow
     "E": 6,  # R_shoulder
     "F": 7,  # R_elbow
-    "G": 9,  # L_hip
-    "H": 10,  # L_knee
-    "I": 12,  # R_hip
-    "J": 13,  # R_knee
+    # 下半身対応を再開するときに、以下を有効化する。
+    # "G": 9,  # L_hip
+    # "H": 10,  # L_knee
+    # "I": 12,  # R_hip
+    # "J": 13,  # R_knee
 }
 
-_THREE_AXIS_JOINTS = frozenset("ABCEGI")
+UPPER_BODY_JOINTS = ("A", "B", "C", "D", "E", "F")
+# 下半身対応を再開するときは、G〜Jを追加してこの集合を切り替える。
+# ALL_BODY_JOINTS = UPPER_BODY_JOINTS + ("G", "H", "I", "J")
+_THREE_AXIS_JOINTS = frozenset("ABCE")
+# 下半身対応時はG/Iを3軸関節へ追加する。
+# _THREE_AXIS_JOINTS = frozenset("ABCEGI")
 _PITCH_AXIS = 1
 
 
@@ -31,20 +37,20 @@ class MotionLanguageEncoder:
     """
 
     def __init__(self, joint_indices=None):
-        """Create an encoder with an optional A-J to input-index mapping."""
+        """Create an encoder with an optional A-F to input-index mapping."""
         if joint_indices is None:
             joint_indices = DEFAULT_JOINT_INDICES
         if not isinstance(joint_indices, Mapping):
             raise TypeError("joint_indices must be a mapping")
-        if set(joint_indices) != set(DEFAULT_JOINT_INDICES):
-            raise ValueError("joint_indices must contain exactly A through J")
+        if set(joint_indices) != set(UPPER_BODY_JOINTS):
+            raise ValueError("joint_indices must contain exactly A through F")
         if any(
             not isinstance(index, (int, np.integer)) or not 0 <= index < 15
             for index in joint_indices.values()
         ):
             raise ValueError("joint indices must be integers from 0 through 14")
         self.joint_indices = {
-            label: int(joint_indices[label]) for label in DEFAULT_JOINT_INDICES
+            label: int(joint_indices[label]) for label in UPPER_BODY_JOINTS
         }
 
     @staticmethod
@@ -85,18 +91,18 @@ class MotionLanguageEncoder:
 
         current_tokens = {
             label: self._encode_joint(label, current)
-            for label in DEFAULT_JOINT_INDICES
+            for label in UPPER_BODY_JOINTS
         }
         if previous is None:
             tokens = current_tokens.values()
         else:
             previous_tokens = {
                 label: self._encode_joint(label, previous)
-                for label in DEFAULT_JOINT_INDICES
+                for label in UPPER_BODY_JOINTS
             }
             tokens = (
                 current_tokens[label]
-                for label in DEFAULT_JOINT_INDICES
+                for label in UPPER_BODY_JOINTS
                 if current_tokens[label] != previous_tokens[label]
             )
         return f"<{''.join(tokens)}>"
