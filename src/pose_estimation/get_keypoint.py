@@ -5,20 +5,16 @@ import depthai as dai
 import numpy as np
 import time
 import argparse
-import csv
-from datetime import datetime
 from collections import deque
-from pathlib import Path
 
 try:
-    from .calculate_joint_angles_array import (
-        OUTPUT_JOINTS,
-        calculate_joint_angles,
-    )
+    from .calculate_joint_angles_array import calculate_joint_angles
     from .motion_trigger import MotionTriggerEngine
+    from .motion_encoder import MotionLanguageEncoder
 except ImportError:
-    from calculate_joint_angles_array import OUTPUT_JOINTS, calculate_joint_angles
+    from calculate_joint_angles_array import calculate_joint_angles
     from motion_trigger import MotionTriggerEngine
+    from motion_encoder import MotionLanguageEncoder
 
 NUM_JOINTS = 17
 
@@ -62,28 +58,11 @@ motion_trigger = MotionTriggerEngine(
     min_trigger_frames=6,
     stability_frames=8,
 )
+motion_encoder = MotionLanguageEncoder()
 
 SIGNAL_WINDOW_SIZE = 60
 angle_energy_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
 
-
-def save_angle_sequence_csv(angle_sequence):
-    """Save one completed angle sequence in the temporary CSV format."""
-    output_dir = Path(__file__).resolve().parents[2] / "data_logs" / "angles"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    output_path = output_dir / f"motion_angles_{timestamp}.csv"
-    headers = ["frame"]
-    for joint in OUTPUT_JOINTS:
-        headers.extend(f"{joint}_{axis.lower()}" for axis in ("Roll", "Pitch", "Yaw"))
-
-    with output_path.open("w", newline="") as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow(headers)
-        for frame_index, frame_angles in enumerate(angle_sequence):
-            writer.writerow([frame_index, *frame_angles.reshape(-1)])
-
-    return output_path
 
 with dai.Pipeline(device) as pipeline:
     cameraNode = pipeline.create(dai.node.Camera).build(sensorFps=fps)
@@ -224,13 +203,13 @@ with dai.Pipeline(device) as pipeline:
             pass
 
         if extracted_angle_sequence is not None:
-            # TODO: 動作確認用の過渡的なCSV保存機能（エンコーダー実装時に削除予定）
-            output_path = save_angle_sequence_csv(extracted_angle_sequence)
+            motion_language = motion_encoder.encode_sequence(extracted_angle_sequence)
             print(
-                f"動作データを保存しました: {output_path} "
-                f"(フレーム数: {extracted_angle_sequence.shape[0]})"
+                "\n=== 人間動作言語 ===\n"
+                f"フレーム数: {extracted_angle_sequence.shape[0]}\n"
+                f"{motion_language}\n"
+                "==================\n"
             )
-            # TODO: motion_encoder への角度配列連携は仕様確定後に実装する。
 
         angle_energy_history.append(angle_energy)
 
