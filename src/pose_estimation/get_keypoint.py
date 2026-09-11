@@ -62,6 +62,7 @@ motion_encoder = MotionLanguageEncoder()
 
 SIGNAL_WINDOW_SIZE = 60
 angle_energy_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
+energy_measurement_frame = 0
 
 
 with dai.Pipeline(device) as pipeline:
@@ -112,7 +113,7 @@ with dai.Pipeline(device) as pipeline:
         return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
 
     def process_and_display(frame, detections):
-        global last_frame_time, fps_display
+        global last_frame_time, fps_display, energy_measurement_frame
 
         current_time = time.monotonic()
         frame_interval = current_time - last_frame_time
@@ -198,6 +199,15 @@ with dai.Pipeline(device) as pipeline:
             angle_energy, extracted_angle_sequence = motion_trigger.process_frame(
                 angle_frame
             )
+            energy_measurement_frame += 1
+            if energy_measurement_frame % 10 == 0:
+                state = "TRACKING" if motion_trigger.current_state == 1 else "IDLE"
+                print(
+                    f"[ANGLE ENERGY] frame={energy_measurement_frame} "
+                    f"raw={motion_trigger.last_raw_energy:.3f} "
+                    f"smoothed={motion_trigger.last_smoothed_energy:.3f} "
+                    f"state={state}"
+                )
         except (TypeError, ValueError):
             # 見切れや欠損で姿勢を構成できないフレームは状態を変更しない。
             pass

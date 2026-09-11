@@ -36,6 +36,8 @@ class MotionTriggerEngine:
         self.below_threshold_counter = 0
         self.previous_angles = None
         self.energy_history = deque(maxlen=smoothing_frames)
+        self.last_raw_energy = 0.0
+        self.last_smoothed_energy = 0.0
 
     @staticmethod
     def _angle_difference(current_angles, previous_angles):
@@ -59,6 +61,8 @@ class MotionTriggerEngine:
         if self.previous_angles is None:
             self.previous_angles = angles.copy()
             self.energy_history.append(0.0)
+            self.last_raw_energy = 0.0
+            self.last_smoothed_energy = 0.0
             return 0.0, None
 
         difference = self._angle_difference(angles, self.previous_angles)
@@ -66,6 +70,8 @@ class MotionTriggerEngine:
         self.previous_angles = angles.copy()
         self.energy_history.append(raw_energy)
         smoothed_energy = float(np.mean(self.energy_history))
+        self.last_raw_energy = raw_energy
+        self.last_smoothed_energy = smoothed_energy
         extracted_sequence = None
 
         if self.current_state == self.IDLE:
