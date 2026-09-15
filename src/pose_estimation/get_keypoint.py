@@ -6,6 +6,8 @@ import numpy as np
 import time
 import argparse
 from collections import deque
+from datetime import datetime
+from pathlib import Path
 
 try:
     from .calculate_joint_angles_array import calculate_joint_angles
@@ -63,6 +65,8 @@ motion_encoder = MotionLanguageEncoder()
 SIGNAL_WINDOW_SIZE = 60
 angle_energy_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
 energy_measurement_frame = 0
+video_writer = None
+video_output_path = None
 
 
 with dai.Pipeline(device) as pipeline:
@@ -114,6 +118,7 @@ with dai.Pipeline(device) as pipeline:
 
     def process_and_display(frame, detections):
         global last_frame_time, fps_display, energy_measurement_frame
+        global video_writer, video_output_path
 
         current_time = time.monotonic()
         frame_interval = current_time - last_frame_time
@@ -251,22 +256,46 @@ with dai.Pipeline(device) as pipeline:
             )
 
         cv2.putText(frame_black_skeleton, f"FPS: {fps_display:.1f}", (frame.shape[1] - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+
+        if video_writer is None:
+            output_dir = Path(__file__).resolve().parents[2] / "data_logs" / "videos"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            video_output_path = output_dir / f"skeleton_{timestamp}.mp4"
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            video_writer = cv2.VideoWriter(
+                str(video_output_path),
+                fourcc,
+                fps,
+                (frame_black_skeleton.shape[1], frame_black_skeleton.shape[0]),
+            )
+            if not video_writer.isOpened():
+                video_writer.release()
+                video_writer = None
+                raise RuntimeError(f"動画ファイルを開けません: {video_output_path}")
+
+        video_writer.write(frame_black_skeleton)
         
         cv2.imshow("Skeleton Detection", frame_black_skeleton)
         cv2.imshow("Motion Trigger Monitor", graph_img)
 
-    while pipeline.isRunning():
-        inRgb = qRgb.tryGet()
-        inDet = qDet.tryGet()
+    try:
+        while pipeline.isRunning():
+            inRgb = qRgb.tryGet()
+            inDet = qDet.tryGet()
 
-        if inRgb is not None: frame = inRgb.getCvFrame()
-        if inDet is not None: detections = inDet.detections
+            if inRgb is not None: frame = inRgb.getCvFrame()
+            if inDet is not None: detections = inDet.detections
             
-        if frame is not None:
-            process_and_display(frame, detections)
-            frame = None 
+            if frame is not None:
+                process_and_display(frame, detections)
+                frame = None
             
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord("q"):
-            pipeline.stop()
-            break
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                pipeline.stop()
+                break
+    finally:
+        if video_writer is not None:
+            video_writer.release()
+            print(f"骨格動画を保存しました: {video_output_path}")
