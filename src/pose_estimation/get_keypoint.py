@@ -129,6 +129,7 @@ with dai.Pipeline(device) as pipeline:
         fps_display = np.mean(fps_smoothing_queue)
 
         frame_black_skeleton = np.zeros_like(frame)
+        frame_preview = frame.copy()
         current_frame_data = np.zeros((NUM_JOINTS, 3), dtype=np.float32)
         
         main_detection = None
@@ -144,6 +145,7 @@ with dai.Pipeline(device) as pipeline:
             detection = main_detection
             bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
             cv2.rectangle(frame_black_skeleton, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
+            cv2.rectangle(frame_preview, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
 
             keypoints = detection.getKeypoints()
             if len(keypoints) != 0:
@@ -188,12 +190,14 @@ with dai.Pipeline(device) as pipeline:
                         current_frame_data[j] = [0.0, 0.0, 0.0]
 
                     cv2.circle(frame_black_skeleton, (keypoint_pos[0], keypoint_pos[1]), 3, (0, 255, 0), -1)
+                    cv2.circle(frame_preview, (keypoint_pos[0], keypoint_pos[1]), 3, (0, 255, 0), -1)
 
                 for edge in YOLO26_EDGES:
                     if edge[0] < len(keypoints) and edge[1] < len(keypoints):
                         kp1_pos = frameNorm(frame, (keypoints[edge[0]].imageCoordinates.x, keypoints[edge[0]].imageCoordinates.y))
                         kp2_pos = frameNorm(frame, (keypoints[edge[1]].imageCoordinates.x, keypoints[edge[1]].imageCoordinates.y))
                         cv2.line(frame_black_skeleton, (kp1_pos[0], kp1_pos[1]), (kp2_pos[0], kp2_pos[1]), (0, 255, 0), 2)
+                        cv2.line(frame_preview, (kp1_pos[0], kp1_pos[1]), (kp2_pos[0], kp2_pos[1]), (0, 255, 0), 2)
 
         angle_energy = 0.0
         extracted_angle_sequence = None
@@ -256,6 +260,7 @@ with dai.Pipeline(device) as pipeline:
             )
 
         cv2.putText(frame_black_skeleton, f"FPS: {fps_display:.1f}", (frame.shape[1] - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+        cv2.putText(frame_preview, f"FPS: {fps_display:.1f}", (frame.shape[1] - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
 
         if video_writer is None:
             output_dir = Path(__file__).resolve().parents[2] / "data_logs" / "videos"
@@ -276,7 +281,8 @@ with dai.Pipeline(device) as pipeline:
 
         video_writer.write(frame_black_skeleton)
         
-        cv2.imshow("Skeleton Detection", frame_black_skeleton)
+        cv2.imshow("Skeleton Detection", frame_preview)
+        cv2.imshow("Skeleton Recording", frame_black_skeleton)
         cv2.imshow("Motion Trigger Monitor", graph_img)
 
     try:
