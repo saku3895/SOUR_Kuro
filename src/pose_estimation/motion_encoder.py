@@ -5,52 +5,70 @@ from collections.abc import Mapping
 import numpy as np
 
 
-DEFAULT_JOINT_INDICES = {
-    "A": 0,  # hips
-    "B": 1,  # neck
-    "C": 3,  # L_shoulder
-    "D": 4,  # L_elbow
-    "E": 6,  # R_shoulder
-    "F": 7,  # R_elbow
-    # 下半身対応を再開するときに、以下を有効化する。
-    # "G": 9,  # L_hip
-    # "H": 10,  # L_knee
-    # "I": 12,  # R_hip
-    # "J": 13,  # R_knee
+AXIS_MAPPING = {
+    "A": (0, 0, "signed", 10),  # hips Roll
+    "B": (0, 1, "signed", 10),  # hips Pitch
+    "C": (0, 2, "signed", 10),  # hips Yaw
+    "D": (1, 0, "signed", 10),  # neck Roll
+    "E": (1, 1, "signed", 10),  # neck Pitch
+    "F": (1, 2, "signed", 10),  # neck Yaw
+    "G": (3, 0, "signed", 10),  # L_shoulder Roll
+    "H": (3, 1, "signed", 10),  # L_shoulder Pitch
+    "I": (3, 2, "signed", 10),  # L_shoulder Yaw
+    "J": (4, 1, "absolute", 10),  # L_elbow Pitch
+    "K": (6, 0, "signed", 10),  # R_shoulder Roll
+    "L": (6, 1, "signed", 10),  # R_shoulder Pitch
+    "M": (6, 2, "signed", 10),  # R_shoulder Yaw
+    "N": (7, 1, "absolute", 10),  # R_elbow Pitch
 }
 
-UPPER_BODY_JOINTS = ("A", "B", "C", "D", "E", "F")
-# 下半身対応を再開するときは、G〜Jを追加してこの集合を切り替える。
-# ALL_BODY_JOINTS = UPPER_BODY_JOINTS + ("G", "H", "I", "J")
-_THREE_AXIS_JOINTS = frozenset("ABCE")
-# 下半身対応時はG/Iを3軸関節へ追加する。
-# _THREE_AXIS_JOINTS = frozenset("ABCEGI")
-_PITCH_AXIS = 1
+# 下半身対応時に、以下をAXIS_MAPPINGへ追加する。
+# "O": (9, 0, "signed", 10),  # L_hip Roll
+# "P": (9, 1, "signed", 10),  # L_hip Pitch
+# "Q": (9, 2, "signed", 10),  # L_hip Yaw
+# "R": (10, 1, "absolute", 10),  # L_knee Pitch
+# "S": (12, 0, "signed", 10),  # R_hip Roll
+# "T": (12, 1, "signed", 10),  # R_hip Pitch
+# "U": (12, 2, "signed", 10),  # R_hip Yaw
+# "V": (13, 1, "absolute", 10),  # R_knee Pitch
+
+AXIS_IDS = tuple(AXIS_MAPPING)
 
 
 class MotionLanguageEncoder:
     """Convert ``(frames, 15, 3)`` Euler-angle arrays to ``<...>`` lines.
 
-    The input angle order is ``[Roll, Pitch, Yaw]``. Three-axis joints use
-    all three values in that order. Elbows and knees use the absolute Pitch
-    value as their single flexion/extension value.
+    The input angle order is ``[Roll, Pitch, Yaw]``. Each configured axis
+    receives its own alphabetic ID and quantized value.
     """
 
-    def __init__(self, joint_indices=None):
-        """Create an encoder with an optional A-F to input-index mapping."""
-        if joint_indices is None:
-            joint_indices = DEFAULT_JOINT_INDICES
-        if not isinstance(joint_indices, Mapping):
-            raise TypeError("joint_indices must be a mapping")
-        if set(joint_indices) != set(UPPER_BODY_JOINTS):
-            raise ValueError("joint_indices must contain exactly A through F")
-        if any(
-            not isinstance(index, (int, np.integer)) or not 0 <= index < 15
-            for index in joint_indices.values()
+    def __init__(self, num_levels=None, axis_levels=None):
+        if num_levels is not None and (
+            not isinstance(num_levels, (int, np.integer)) or num_levels < 1
         ):
-            raise ValueError("joint indices must be integers from 0 through 14")
-        self.joint_indices = {
-            label: int(joint_indices[label]) for label in UPPER_BODY_JOINTS
+            raise ValueError("num_levels must be a positive integer")
+        if axis_levels is not None and not isinstance(axis_levels, Mapping):
+            raise TypeError("axis_levels must be a mapping of axis IDs to levels")
+
+        self.axis_levels = {
+            axis_id: int(mapping[3]) for axis_id, mapping in AXIS_MAPPING.items()
+        }
+        if num_levels is not None:
+            self.axis_levels = {
+                axis_id: int(num_levels) for axis_id in AXIS_IDS
+            }
+        if axis_levels is not None:
+            unknown_axes = set(axis_levels) - set(AXIS_IDS)
+            if unknown_axes:
+                raise ValueError(f"unknown axis IDs: {sorted(unknown_axes)}")
+            self.axis_levels.update(axis_levels)
+        if any(
+            not isinstance(level, (int, np.integer)) or level < 1
+            for level in self.axis_levels.values()
+        ):
+            raise ValueError("axis quantization levels must be positive integers")
+        self.axis_levels = {
+            axis_id: int(level) for axis_id, level in self.axis_levels.items()
         }
 
     @staticmethod
@@ -64,23 +82,25 @@ class MotionLanguageEncoder:
             raise ValueError("frame angles must contain only finite values")
         return frame
 
-    @staticmethod
-    def _quantize_three_axis(values):
-        clipped = np.clip(values, -180.0, 180.0)
-        quantized = np.floor((clipped + 180.0) / 360.0 * 10.0)
-        return np.clip(quantized, 0, 9).astype(int)
+    def _quantize_signed(self, value, num_levels):
+        clipped = np.clip(value, -180.0, 180.0)
+        quantized = np.floor((clipped + 180.0) / 360.0 * num_levels)
+        return int(np.clip(quantized, 0, num_levels - 1))
 
-    @staticmethod
-    def _quantize_one_axis(value):
+    def _quantize_absolute(self, value, num_levels):
         clipped = np.clip(abs(value), 0.0, 180.0)
-        quantized = np.floor(clipped / 180.0 * 10.0)
-        return int(np.clip(quantized, 0, 9))
+        quantized = np.floor(clipped / 180.0 * num_levels)
+        return int(np.clip(quantized, 0, num_levels - 1))
 
-    def _encode_joint(self, label, frame_angles):
-        values = frame_angles[self.joint_indices[label]]
-        if label in _THREE_AXIS_JOINTS:
-            return f"{label}{''.join(map(str, self._quantize_three_axis(values)))}"
-        return f"{label}{self._quantize_one_axis(values[_PITCH_AXIS])}"
+    def _encode_axis(self, axis_id, frame_angles):
+        joint_index, axis_index, quantization, _ = AXIS_MAPPING[axis_id]
+        num_levels = self.axis_levels[axis_id]
+        value = frame_angles[joint_index, axis_index]
+        if quantization == "absolute":
+            quantized = self._quantize_absolute(value, num_levels)
+        else:
+            quantized = self._quantize_signed(value, num_levels)
+        return f"{axis_id}{quantized}"
 
     def encode_frame(self, current_frame_angles, prev_frame_angles=None):
         """Encode one frame, emitting only changed quantized joints when set."""
@@ -90,20 +110,20 @@ class MotionLanguageEncoder:
             previous = self._validate_frame(prev_frame_angles)
 
         current_tokens = {
-            label: self._encode_joint(label, current)
-            for label in UPPER_BODY_JOINTS
+            axis_id: self._encode_axis(axis_id, current)
+            for axis_id in AXIS_IDS
         }
         if previous is None:
             tokens = current_tokens.values()
         else:
             previous_tokens = {
-                label: self._encode_joint(label, previous)
-                for label in UPPER_BODY_JOINTS
+                axis_id: self._encode_axis(axis_id, previous)
+                for axis_id in AXIS_IDS
             }
             tokens = (
-                current_tokens[label]
-                for label in UPPER_BODY_JOINTS
-                if current_tokens[label] != previous_tokens[label]
+                current_tokens[axis_id]
+                for axis_id in AXIS_IDS
+                if current_tokens[axis_id] != previous_tokens[axis_id]
             )
         return f"<{''.join(tokens)}>"
 
@@ -126,12 +146,12 @@ class MotionLanguageEncoder:
 
 
 if __name__ == "__main__":
-    # Extra joints and axes remain in the input but are intentionally ignored.
     dummy_angles = np.zeros((3, 15, 3), dtype=float)
     dummy_angles[0, 0] = [-180.0, 0.0, 180.0]
-    dummy_angles[1, 4, 1] = 18.0
-    dummy_angles[1, 6] = [36.0, 0.0, 0.0]
+    dummy_angles[1, 0, 0] = 36.0
+    dummy_angles[1, 4, 1] = 36.0
     dummy_angles[2] = dummy_angles[1]
 
     encoder = MotionLanguageEncoder()
     print(encoder.encode_sequence(dummy_angles))
+    print(MotionLanguageEncoder(num_levels=16).encode_frame(dummy_angles[1]))
