@@ -10,13 +10,13 @@ from datetime import datetime
 from pathlib import Path
 
 try:
-    from .calculate_joint_angles_array import calculate_joint_angles
+    from .calculate_joint_angles import calculate_joint_angles
     from .motion_trigger import MotionTriggerEngine
-    from .motion_encoder import MotionLanguageEncoder
+    from .motion_language import MotionLanguageEncoder
 except ImportError:
-    from calculate_joint_angles_array import calculate_joint_angles
+    from calculate_joint_angles import calculate_joint_angles
     from motion_trigger import MotionTriggerEngine
-    from motion_encoder import MotionLanguageEncoder
+    from motion_language import MotionLanguageEncoder
 
 NUM_JOINTS = 17
 
