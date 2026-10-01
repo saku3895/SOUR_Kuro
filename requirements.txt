@@ -3,9 +3,11 @@ charset-normalizer==3.4.4
 future==1.0.0
 idna==3.11
 imufusion==1.2.11
+matplotlib==3.10.9
 iso8601==2.1.0
 numpy==2.4.0
 PyYAML==6.0.3
+pytest==8.4.2
 requests==2.32.5
 serial==0.0.97
 smbus2==0.6.0
