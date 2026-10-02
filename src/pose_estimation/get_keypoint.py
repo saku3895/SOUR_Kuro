@@ -13,12 +13,10 @@ try:
     from .calculate_joint_angles import calculate_joint_angles
     from .motion_trigger import MotionTriggerEngine
     from .motion_language import MotionLanguageEncoder
-    from .motion_log import save_motion_log
 except ImportError:
     from calculate_joint_angles import calculate_joint_angles
     from motion_trigger import MotionTriggerEngine
     from motion_language import MotionLanguageEncoder
-    from motion_log import save_motion_log
 
 NUM_JOINTS = 17
 
@@ -30,12 +28,6 @@ YOLO26_EDGES = [
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--depthSource", type=str, default="stereo", choices=["stereo", "neural"])
-parser.add_argument(
-    "--motion-log-dir",
-    type=Path,
-    default=Path(__file__).resolve().parents[2] / "data_logs" / "motion",
-    help="directory for one motion log per detected sequence",
-)
 args = parser.parse_args()
 
 device = dai.Device()
@@ -231,11 +223,9 @@ with dai.Pipeline(device) as pipeline:
 
         if extracted_angle_sequence is not None:
             motion_language = motion_encoder.encode_sequence(extracted_angle_sequence)
-            motion_log_path = save_motion_log(motion_language, args.motion_log_dir)
             print(
                 "\n=== 人間動作言語 ===\n"
                 f"フレーム数: {extracted_angle_sequence.shape[0]}\n"
-                f"保存先: {motion_log_path}\n"
                 f"{motion_language}\n"
                 "==================\n"
             )
