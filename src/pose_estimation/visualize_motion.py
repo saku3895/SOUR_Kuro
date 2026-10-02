@@ -53,7 +53,7 @@ def _rotation_matrix(angles: np.ndarray) -> np.ndarray:
 
 
 def reconstruct_3d_positions(euler_angles: np.ndarray) -> np.ndarray:
-    """Reconstruct ``(frames, 15, 3)`` positions with hips fixed at the origin."""
+    """Reconstruct ``(frames, 15, 3)`` positions with hips at the origin."""
     angles = np.asarray(euler_angles, dtype=float)
     expected_shape = (len(JOINT_NAMES), 3)
     if angles.ndim != 3 or angles.shape[1:] != expected_shape:
@@ -63,7 +63,9 @@ def reconstruct_3d_positions(euler_angles: np.ndarray) -> np.ndarray:
 
     positions = np.zeros_like(angles)
     for frame_index, frame_angles in enumerate(angles):
-        global_rotations = {"hips": np.eye(3)}
+        global_rotations = {
+            "hips": _rotation_matrix(frame_angles[JOINT_INDEX["hips"]])
+        }
         for child_name in JOINT_NAMES[1:]:
             parent_name = PARENTS[child_name]
             if parent_name is None:
