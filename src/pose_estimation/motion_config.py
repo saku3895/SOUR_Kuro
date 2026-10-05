@@ -45,75 +45,29 @@ JOINT_INDEX: Final[dict[str, int]] = {
     name: index for index, name in enumerate(JOINT_NAMES)
 }
 
-# Entries are (joint index, Euler axis index, minimum, maximum, levels).
+# Entries are (joint index, Euler axis index, range name, levels, minimum, maximum).
 # Euler axes are [Z, X, Y], i.e. [Roll, Pitch, Yaw] for this project.
-_ROM: Final[dict[str, tuple[float, float]]] = {
-    "hips": (-45.0, 45.0),
-    "neck": (-60.0, 60.0),
-    "head": (-60.0, 60.0),
-    "shoulder_roll": (-60.0, 60.0),
-    "shoulder_pitch": (-60.0, 180.0),
-    "shoulder_yaw": (-90.0, 90.0),
-    "elbow_roll": (-10.0, 10.0),
-    "elbow_pitch": (0.0, 150.0),
-    "elbow_yaw": (-10.0, 10.0),
-    "wrist": (-60.0, 60.0),
-    "hip_roll": (-45.0, 45.0),
-    "hip_pitch": (-30.0, 120.0),
-    "hip_yaw": (-45.0, 45.0),
-    "knee": (0.0, 150.0),
-    "ankle": (-45.0, 30.0),
-}
-
-
-def _axis(joint: str, axis: int, rom_name: str, levels: int = 10) -> tuple[int, int, float, float, int]:
-    minimum, maximum = _ROM[rom_name]
-    return JOINT_INDEX[joint], axis, minimum, maximum, levels
-
-
-AXIS_MAPPING: Final[dict[str, tuple[int, int, float, float, int]]] = {
-    "A": _axis("hips", 0, "hips"),
-    "B": _axis("hips", 1, "hips"),
-    "C": _axis("hips", 2, "hips"),
-    "D": _axis("neck", 0, "neck"),
-    "E": _axis("neck", 1, "neck"),
-    "F": _axis("neck", 2, "neck"),
-    "G": _axis("L_shoulder", 0, "shoulder_roll"),
-    "H": _axis("L_shoulder", 1, "shoulder_pitch"),
-    "I": _axis("L_shoulder", 2, "shoulder_yaw"),
-    "J": _axis("L_elbow", 0, "elbow_roll"),
-    "K": _axis("L_elbow", 1, "elbow_pitch"),
-    "L": _axis("L_elbow", 2, "elbow_yaw"),
-    "M": _axis("L_wrist", 0, "wrist"),
-    "N": _axis("L_wrist", 1, "wrist"),
-    "O": _axis("L_wrist", 2, "wrist"),
-    "P": _axis("R_shoulder", 0, "shoulder_roll"),
-    "Q": _axis("R_shoulder", 1, "shoulder_pitch"),
-    "R": _axis("R_shoulder", 2, "shoulder_yaw"),
-    "S": _axis("R_elbow", 0, "elbow_roll"),
-    "T": _axis("R_elbow", 1, "elbow_pitch"),
-    "U": _axis("R_elbow", 2, "elbow_yaw"),
-    "V": _axis("R_wrist", 0, "wrist"),
-    "W": _axis("R_wrist", 1, "wrist"),
-    "X": _axis("R_wrist", 2, "wrist"),
-    "Y": _axis("L_hip", 0, "hip_roll"),
-    "Z": _axis("L_hip", 1, "hip_pitch"),
-    "AA": _axis("L_hip", 2, "hip_yaw"),
-    "AB": _axis("L_knee", 0, "elbow_roll"),
-    "AC": _axis("L_knee", 1, "knee"),
-    "AD": _axis("L_knee", 2, "elbow_roll"),
-    "AE": _axis("L_ankle", 0, "ankle"),
-    "AF": _axis("L_ankle", 1, "ankle"),
-    "AG": _axis("L_ankle", 2, "ankle"),
-    "AH": _axis("R_hip", 0, "hip_roll"),
-    "AI": _axis("R_hip", 1, "hip_pitch"),
-    "AJ": _axis("R_hip", 2, "hip_yaw"),
-    "AK": _axis("R_knee", 0, "elbow_roll"),
-    "AL": _axis("R_knee", 1, "knee"),
-    "AM": _axis("R_knee", 2, "elbow_roll"),
-    "AN": _axis("R_ankle", 0, "ankle"),
-    "AO": _axis("R_ankle", 1, "ankle"),
-    "AP": _axis("R_ankle", 2, "ankle"),
+AXIS_MAPPING: Final[dict[str, tuple[int, int, str, int, float, float]]] = {
+    "A": (0, 0, "range", 10, -50, 50),
+    "B": (0, 1, "range", 10, -30, 45),
+    "C": (0, 2, "range", 10, -40, 40),
+    "D": (1, 0, "range", 10, -50, 50),
+    "E": (1, 1, "range", 10, -50, 60),
+    "F": (1, 2, "range", 10, -60, 60),
+    "G": (2, 0, "range", 10, -90, 90),
+    "H": (2, 1, "range", 10, -30, 135),
+    "I": (2, 2, "range", 10, -70, 90),
+    "J": (3, 1, "range", 10, -5, 145),
+    "K": (4, 0, "range", 10, -90, 90),
+    "L": (4, 1, "range", 10, -30, 135),
+    "M": (4, 2, "range", 10, -70, 90),
+    "N": (5, 1, "range", 10, -5, 145),
+    "O": (6, 0, "range", 10, -20, 45),
+    "P": (6, 1, "range", 10, -15, 125),
+    "Q": (6, 2, "range", 10, -45, 45),
+    "R": (7, 1, "range", 10, 0, 130),
+    "S": (8, 1, "range", 10, -45, 20),
+    "T": (8, 0, "range", 10, -30, 20),
 }
 
 AXIS_IDS: Final[tuple[str, ...]] = tuple(AXIS_MAPPING)

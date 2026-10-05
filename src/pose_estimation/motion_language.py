@@ -37,7 +37,7 @@ class MotionLanguageEncoder:
     def _frame_values(self, frame: np.ndarray) -> dict[str, int]:
         result = {}
         for axis_id in AXIS_IDS:
-            joint, axis, minimum, maximum, levels = AXIS_MAPPING[axis_id]
+            joint, axis, _, levels, minimum, maximum = AXIS_MAPPING[axis_id]
             result[axis_id] = self._quantize(frame[joint, axis], minimum, maximum, levels)
         return result
 
@@ -82,7 +82,7 @@ class MotionLanguageDecoder:
 
     @staticmethod
     def _dequantize(axis_id: str, quantized: int) -> float:
-        _, _, minimum, maximum, levels = AXIS_MAPPING[axis_id]
+        _, _, _, levels, minimum, maximum = AXIS_MAPPING[axis_id]
         if not 0 <= quantized < levels:
             raise ValueError(f"axis {axis_id}: quantized value outside 0..{levels - 1}")
         return minimum + (maximum - minimum) * (quantized + 0.5) / levels
@@ -96,7 +96,7 @@ class MotionLanguageDecoder:
         frames = []
         for tokens in parsed:
             for axis_id, quantized in tokens:
-                joint, axis, _, _, _ = AXIS_MAPPING[axis_id]
+                joint, axis, _, _, _, _ = AXIS_MAPPING[axis_id]
                 state[joint, axis] = self._dequantize(axis_id, quantized)
             frames.append(state.copy())
         return np.asarray(frames, dtype=float)
