@@ -71,6 +71,25 @@ video_writer = None
 video_output_path = None
 
 
+def save_motion_sequence(angle_sequence):
+    if angle_sequence is None or len(angle_sequence) == 0:
+        return None
+
+    motion_language = motion_encoder.encode_sequence(angle_sequence)
+    motion_log_path = save_motion_log(
+        motion_language,
+        Path(__file__).resolve().parents[2] / "data_logs" / "motion",
+    )
+    print(
+        "\n=== 人間動作言語 ===\n"
+        f"フレーム数: {angle_sequence.shape[0]}\n"
+        f"保存先: {motion_log_path}\n"
+        f"{motion_language}\n"
+        "==================\n"
+    )
+    return motion_log_path
+
+
 with dai.Pipeline(device) as pipeline:
     cameraNode = pipeline.create(dai.node.Camera).build(sensorFps=fps)
     monoLeft = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B, sensorFps=fps)
@@ -224,18 +243,7 @@ with dai.Pipeline(device) as pipeline:
             pass
 
         if extracted_angle_sequence is not None:
-            motion_language = motion_encoder.encode_sequence(extracted_angle_sequence)
-            motion_log_path = save_motion_log(
-                motion_language,
-                Path(__file__).resolve().parents[2] / "data_logs" / "motion",
-            )
-            print(
-                "\n=== 人間動作言語 ===\n"
-                f"フレーム数: {extracted_angle_sequence.shape[0]}\n"
-                f"保存先: {motion_log_path}\n"
-                f"{motion_language}\n"
-                "==================\n"
-            )
+            save_motion_sequence(extracted_angle_sequence)
 
         angle_energy_history.append(angle_energy)
 
@@ -309,6 +317,8 @@ with dai.Pipeline(device) as pipeline:
                 pipeline.stop()
                 break
     finally:
+        if motion_trigger.current_state == motion_trigger.TRACKING:
+            save_motion_sequence(np.asarray(motion_trigger.gesture_buffer, dtype=float))
         if video_writer is not None:
             video_writer.release()
             print(f"骨格動画を保存しました: {video_output_path}")
