@@ -107,7 +107,7 @@ def animate_motion(
     axis.set_ylim(*AXIS_LIMITS)
     axis.set_zlim(*AXIS_LIMITS)
     axis.set_box_aspect((1, 1, 1))
-    axis.view_init(elev=18.0, azim=-65.0)
+    axis.view_init(elev=90.0, azim=-90.0)
 
     points = axis.scatter([], [], [], color="tab:blue", s=35)
     connections = [
@@ -116,8 +116,12 @@ def animate_motion(
         if parent is not None
     ]
     lines = [axis.plot([], [], [], color="tab:orange", linewidth=2.5)[0] for _ in connections]
+    current_frame = [0]
+    playback_speed = [1.0]
+    paused = [False]
 
     def update(frame_index: int):
+        current_frame[0] = frame_index
         frame = positions[frame_index]
         points._offsets3d = (frame[:, 0], frame[:, 1], frame[:, 2])
         for line, (parent_index, child_index) in zip(lines, connections):
@@ -134,6 +138,41 @@ def animate_motion(
         blit=False,
         repeat=True,
     )
+
+    def set_frame(frame_index: int):
+        current_frame[0] = frame_index % len(positions)
+        update(current_frame[0])
+        figure.canvas.draw_idle()
+
+    def set_speed(speed: float):
+        playback_speed[0] = min(2.0, max(0.125, speed))
+        animation.event_source.interval = 1000 / (fps * playback_speed[0])
+        axis.set_title(
+            f"Motion reconstruction: frame {current_frame[0] + 1}/{len(positions)} "
+            f"({playback_speed[0]:g}x)"
+        )
+        figure.canvas.draw_idle()
+
+    def on_key(event):
+        if event.key == " ":
+            paused[0] = not paused[0]
+            if paused[0]:
+                animation.event_source.stop()
+            else:
+                animation.event_source.start()
+        elif event.key in ("right", "left"):
+            paused[0] = True
+            animation.event_source.stop()
+            direction = 1 if event.key == "right" else -1
+            set_frame(current_frame[0] + direction)
+        elif event.key in ("[", "down"):
+            set_speed(playback_speed[0] / 2)
+        elif event.key in ("]", "up"):
+            set_speed(playback_speed[0] * 2)
+
+    figure.canvas.mpl_connect("key_press_event", on_key)
+    set_frame(0)
+    set_speed(playback_speed[0])
     if save_path is not None:
         output_path = Path(save_path)
         writer = "pillow" if output_path.suffix.lower() == ".gif" else None
