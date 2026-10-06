@@ -77,22 +77,22 @@ def main():
     # r_core.register_module(PMDemoKuro(robot_properties, 100))
     # r_core.register_module(MotionLangTestKuro(robot_properties, 3000))
     # r_core.register_module(PMCameraMediaPipe(robot_properties, 40, kp=0.08))
+    # r_core.register_module(
+    #     PMMotionLanguageKuro(
+    #         robot_properties,
+    #         [
+    #              "*a5d6e4q6i6m4n7f0r8h4l4j1p4t4#",
+    #             "*a6d7e4q6i6m4n7f0r8h4l4j1p4t4#",
+    #             "*a6d7e4q6i6m4n7f0r8h4l4j1p4t4#",
+    #             "*a7d8e4q6i6m4n7f0r8h4l4j1p4t4#",
+    #             "*a7d8e4q6i6m4n7f0r8h4l4j1p4t4#",
+    #             "*a7d8e4q6i6m4n7f0r8h4l4j1p4t4#",
+    #             "*a5d6e4q6i6m4n7f0r8h4l4j1p4t4#"
+    #         ],
+    #         100,
+    #     )
+    # )
     
-    r_core.register_module(
-        PMMotionLanguageKuro(
-            robot_properties,
-            [
-                 "*a5d6e4q6i6m4n7f0r8h4l4j1p4t4#",
-                "*a6d7e4q6i6m4n7f0r8h4l4j1p4t4#",
-                "*a6d7e4q6i6m4n7f0r8h4l4j1p4t4#",
-                "*a7d8e4q6i6m4n7f0r8h4l4j1p4t4#",
-                "*a7d8e4q6i6m4n7f0r8h4l4j1p4t4#",
-                "*a7d8e4q6i6m4n7f0r8h4l4j1p4t4#",
-                "*a5d6e4q6i6m4n7f0r8h4l4j1p4t4#"
-            ],
-            100,
-        )
-    )
 
     # r_core.register_module(PMCameraFaceTracking(robot_properties, 20))
 
