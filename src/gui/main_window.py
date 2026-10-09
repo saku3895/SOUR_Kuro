@@ -61,6 +61,19 @@ def create_t_pose_coordinates() -> np.ndarray:
     )[np.newaxis, ...]
 
 
+def coco_to_skeleton_positions(coco_coordinates: np.ndarray) -> np.ndarray:
+    """Map one COCO-17 frame to the application's configured 15-joint skeleton."""
+    frame = np.asarray(coco_coordinates, dtype=float)
+    if frame.shape != (1, 17, 3):
+        raise ValueError("coco_coordinates must have shape (1, 17, 3)")
+    positions = np.empty((1, 15, 3), dtype=float)
+    positions[0, 0] = (frame[0, 11] + frame[0, 12]) / 2.0
+    positions[0, 1] = (frame[0, 5] + frame[0, 6]) / 2.0
+    positions[0, 2] = frame[0, 0]
+    positions[0, 3:] = frame[0, [5, 7, 9, 6, 8, 10, 11, 13, 15, 12, 14, 16]]
+    return positions
+
+
 class MotionTestSystem(QMainWindow):
     COCO_JOINTS = (
         "nose", "lefteye", "righteye", "leftear", "rightear",
@@ -84,8 +97,7 @@ class MotionTestSystem(QMainWindow):
         self.timer.timeout.connect(self.next_frame)
         self._init_ui()
         self._init_3d_viewer()
-        self._set_frame(0)
-        self._sync_coordinate_inputs(0)
+        self.reset_pose(log_message=False)
 
     def _init_ui(self) -> None:
         central_widget = QWidget()
@@ -156,6 +168,9 @@ class MotionTestSystem(QMainWindow):
         encode_button = QPushButton("座標更新してエンコード実行")
         encode_button.clicked.connect(self.encode_from_coords)
         coordinate_layout.addWidget(encode_button)
+        reset_button = QPushButton("姿勢を初期状態にリセット")
+        reset_button.clicked.connect(self.reset_pose)
+        coordinate_layout.addWidget(reset_button)
         coordinate_group.setLayout(coordinate_layout)
         control_layout.addWidget(coordinate_group)
 
@@ -184,10 +199,6 @@ class MotionTestSystem(QMainWindow):
         main_layout.addWidget(self.plotter.interactor, stretch=2)
 
     def _init_3d_viewer(self) -> None:
-        self.plotter.show_grid()
-        self.plotter.add_axes()
-        self.plotter.view_xy()
-        self.plotter.camera.up = (0, 1, 0)
         self.joint_meshes = []
         self.bone_meshes = []
         left_indices = {3, 4, 5, 9, 10, 11}
@@ -214,6 +225,20 @@ class MotionTestSystem(QMainWindow):
                     color="gray",
                 )
             )
+        self.plotter.show_bounds(
+            bounds=(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0),
+            location="outer",
+            all_edges=True,
+            ticks="both",
+            font_size=10,
+            xtitle="X Axis",
+            ytitle="Y Axis",
+            ztitle="Z Axis",
+            color="black",
+        )
+        self.plotter.add_axes(line_width=2)
+        self.plotter.view_xy()
+        self.plotter.camera.up = (0, 1, 0)
 
     def load_motion_file(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
@@ -257,6 +282,24 @@ class MotionTestSystem(QMainWindow):
             )
         except (TypeError, ValueError) as error:
             self.log_message(f"エンコードエラー: {error}")
+
+    def reset_pose(self, log_message: bool = True) -> None:
+        """Reset the editable pose and refresh the viewer through motion language."""
+        self.current_coords = create_t_pose_coordinates()
+        try:
+            angles = calc_angles.calculate_joint_angles(self.current_coords)
+            self.sequence_tokens = self.encoder.encode(angles)
+            token_text = "\n".join(self.sequence_tokens)
+            self.language_input.setPlainText(token_text)
+            self.sequence_angles = angles
+            self.sequence_coords = coco_to_skeleton_positions(self.current_coords)
+            self.file_label.setText("初期姿勢")
+            self._set_frame(0)
+            self._sync_coordinate_inputs(self.joint_combo.currentIndex())
+            if log_message:
+                self.log_message("姿勢を初期状態にリセットしました")
+        except (TypeError, ValueError) as error:
+            self.log_message(f"初期姿勢の更新エラー: {error}")
 
     def decode_from_language(self) -> None:
         token_text = self.language_input.toPlainText().strip()
@@ -411,6 +454,7 @@ def main() -> int:
                 "Noto Sans JP",
                 "IPAGothic",
                 "Yu Gothic",
+                "Meiryo",
             )
             if family in available_fonts
         ),
