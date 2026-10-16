@@ -26,8 +26,8 @@ class KuroDemoMotionData():
 
     # きょろきょろ　→　伸び
     demo_motion3_position = [
-        [1135.0, 1230.0, 1650.0, 1400.0, 1550.0, 1570.0, 890.0, 1520.0, 1580.0, 1500.0, 1450.0, 1500.0, 1450.0, 1600.0],
-        [1135.0, 1630.0, 1650.0, 1400.0, 1550.0, 1570.0, 890.0, 1520.0, 1580.0, 1500.0, 1450.0, 1500.0, 1450.0, 1600.0],
+        [1350.0, 1230.0, 1650.0, 1400.0, 1550.0, 1570.0, 890.0, 1520.0, 1580.0, 1500.0, 1450.0, 1500.0, 1450.0, 1600.0],
+        [1350.0, 1630.0, 1650.0, 1400.0, 1550.0, 1570.0, 890.0, 1520.0, 1580.0, 1500.0, 1450.0, 1500.0, 1450.0, 1600.0],
         [1200.0, 1400.0, 1800.0, 1430.0, 1400.0, 1570.0, 890.0, 1600.0, 1580.0, 1030.0, 2000.0, 1500.0, 1250.0, 1800.0]
     ]
     demo_motion3_time = [
@@ -87,8 +87,21 @@ class PMDemoKuro(PeriodicModule):
                 else:
                     if not self.current_motion.is_motion_finished():
                         position, time, interval = self.current_motion.get_next_motion()
+
+                    min_list = self.robot_properties.servo_min_positions[cite: 1]
+                    max_list = self.robot_properties.servo_max_positions[cite: 1]
+
+                    clamped_position = []
+                    for i in range(len(position)):
+                        # i番目のモーターの目標値を取り出し、i番目の最小・最大値内にクランプ
+                        pos = position[i]
+                        min_val = min_list[i]
+                        max_val = max_list[i]
+                        
+                        safe_pos = max(min_val, min(max_val, pos))
+                        clamped_position.append(safe_pos)
     
-                        self.write_servo_positions(lock, data_dict, position, time)
+                        self.write_servo_positions(lock, data_dict, clamped_position, time)
     
                         self.next_motion_interval = interval
                     else:
