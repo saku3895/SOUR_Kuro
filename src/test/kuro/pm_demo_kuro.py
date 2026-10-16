@@ -24,7 +24,7 @@ class KuroDemoMotionData():
     ]
     demo_motion2_interval = [10.0]
 
-    # きょろきょろ
+    # きょろきょろ　→　伸び
     demo_motion3_position = [
         [1135.0, 1230.0, 1650.0, 1400.0, 1550.0, 1570.0, 890.0, 1520.0, 1580.0, 1500.0, 1450.0, 1500.0, 1450.0, 1600.0],
         [1135.0, 1630.0, 1650.0, 1400.0, 1550.0, 1570.0, 890.0, 1520.0, 1580.0, 1500.0, 1450.0, 1500.0, 1450.0, 1600.0],
@@ -45,22 +45,22 @@ class KuroDemoMotionData():
     def get_demo_motion1(self):
         motion1 = Motion(self.demo_motion1_position, self.demo_motion1_time, self.demo_motion1_interval, 
                          loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, 
-                         fluc_amp_motion=50, fluc_amp_time=100, fluc_amp_interval=1000)
+                         fluc_amp_motion=100, fluc_amp_time=100, fluc_amp_interval=1000)
         
         # 首のランダム値 (Shiro: 300~650, 400~550) をKuroのスケールに変換
-        motion1.set_randomizer(0, 0, 1250.0, 1600.0)
-        motion1.set_randomizer(0, 1, 1731.8, 2100.0)
+        motion1.set_randomizer(0, 0, 1150.0, 1550.0)
+        motion1.set_randomizer(0, 1, 1230.0, 1630.0)
         return motion1
 
     def get_demo_motion2(self):
         return Motion(self.demo_motion2_position, self.demo_motion2_time, self.demo_motion2_interval, 
                       loop_time=10, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, 
-                      fluc_amp_motion=50, fluc_amp_time=10, fluc_amp_interval=1000)
+                      fluc_amp_motion=100, fluc_amp_time=10, fluc_amp_interval=1000)
 
     def get_demo_motion3(self):
         return Motion(self.demo_motion3_position, self.demo_motion3_time, self.demo_motion3_interval, 
                       loop_time=1, fluc_type=Motion.FLUCTUATION_TYPE_UNIFORM, 
-                      fluc_amp_motion=50, fluc_amp_time=10, fluc_amp_interval=1000)
+                      fluc_amp_motion=100, fluc_amp_time=10, fluc_amp_interval=1000)
 
 
 class PMDemoKuro(PeriodicModule):
