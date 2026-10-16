@@ -15,6 +15,7 @@ from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QFont, QFontDatabase
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFileDialog,
@@ -29,72 +30,31 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from pose_estimation import calculate_joint_angles as calc_angles
 from pose_estimation import motion_config as m_config
 from pose_estimation import motion_language as m_lang
 from pose_estimation import visualize_motion as vis_motion
 
 
-def create_t_pose_coordinates() -> np.ndarray:
-    """Return one COCO-17 frame used as the GUI's editable base pose."""
-    return np.array(
-        [
-            (0.00, 0.65, 0.00),
-            (-0.025, 0.69, 0.02),
-            (0.025, 0.69, 0.02),
-            (-0.06, 0.65, 0.00),
-            (0.06, 0.65, 0.00),
-            (-0.18, 0.45, 0.00),
-            (0.18, 0.45, 0.00),
-            (-0.45, 0.45, 0.00),
-            (0.45, 0.45, 0.00),
-            (-0.70, 0.45, 0.00),
-            (0.70, 0.45, 0.00),
-            (-0.10, 0.00, 0.00),
-            (0.10, 0.00, 0.00),
-            (-0.10, -0.40, 0.00),
-            (0.10, -0.40, 0.00),
-            (-0.10, -0.80, 0.00),
-            (0.10, -0.80, 0.00),
-        ],
-        dtype=float,
-    )[np.newaxis, ...]
-
-
-def coco_to_skeleton_positions(coco_coordinates: np.ndarray) -> np.ndarray:
-    """Map one COCO-17 frame to the application's configured 15-joint skeleton."""
-    frame = np.asarray(coco_coordinates, dtype=float)
-    if frame.shape != (1, 17, 3):
-        raise ValueError("coco_coordinates must have shape (1, 17, 3)")
-    positions = np.empty((1, 15, 3), dtype=float)
-    positions[0, 0] = (frame[0, 11] + frame[0, 12]) / 2.0
-    positions[0, 1] = (frame[0, 5] + frame[0, 6]) / 2.0
-    positions[0, 2] = frame[0, 0]
-    positions[0, 3:] = frame[0, [5, 7, 9, 6, 8, 10, 11, 13, 15, 12, 14, 16]]
-    return positions
-
-
 class MotionTestSystem(QMainWindow):
-    COCO_JOINTS = (
-        "nose", "lefteye", "righteye", "leftear", "rightear",
-        "leftshoulder", "rightshoulder", "leftelbow", "rightelbow",
-        "leftwrist", "rightwrist", "lefthip", "righthip",
-        "leftknee", "rightknee", "leftankle", "rightankle",
-    )
-
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("動作言語 ユニットテスト・可視化システム")
         self.resize(1300, 850)
+
         self.encoder = m_lang.MotionLanguageEncoder()
         self.decoder = m_lang.MotionLanguageDecoder()
-        self.current_coords = create_t_pose_coordinates()
-        self.sequence_angles = np.zeros((1, len(m_config.JOINT_NAMES), 3), dtype=float)
+
+        # 15関節の指定角度 (1, 15, 3) [Roll, Pitch, Yaw]
+        self.manual_angles = np.zeros((1, len(m_config.JOINT_NAMES), 3), dtype=float)
+        
+        self.sequence_angles = self.manual_angles.copy()
         self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
         self.sequence_tokens: list[str] = []
         self.current_frame_idx = 0
+
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.next_frame)
+
         self._init_ui()
         self._init_3d_viewer()
         self.reset_pose(log_message=False)
@@ -106,6 +66,7 @@ class MotionTestSystem(QMainWindow):
         control_layout = QVBoxLayout()
         control_layout.setContentsMargins(10, 10, 10, 10)
 
+        # 1. 動作言語ファイル読み込み
         file_group = QGroupBox("1. 動作言語ファイル")
         file_layout = QVBoxLayout()
         file_button = QPushButton("txtファイルを選択")
@@ -117,6 +78,7 @@ class MotionTestSystem(QMainWindow):
         file_group.setLayout(file_layout)
         control_layout.addWidget(file_group)
 
+        # 2. 連続再生・ステップ確認
         play_group = QGroupBox("2. 連続再生・ステップ確認")
         play_layout = QVBoxLayout()
         self.frame_label = QLabel("Frame: 0 / 0")
@@ -125,6 +87,7 @@ class MotionTestSystem(QMainWindow):
         self.timeline_slider.valueChanged.connect(self.seek_frame)
         play_layout.addWidget(self.frame_label)
         play_layout.addWidget(self.timeline_slider)
+        
         button_layout = QHBoxLayout()
         previous_button = QPushButton("◀ コマ戻し")
         previous_button.clicked.connect(self.prev_frame)
@@ -136,6 +99,7 @@ class MotionTestSystem(QMainWindow):
         button_layout.addWidget(self.play_button)
         button_layout.addWidget(next_button)
         play_layout.addLayout(button_layout)
+
         speed_layout = QHBoxLayout()
         speed_layout.addWidget(QLabel("再生速度 (ms/frame):"))
         self.speed_spin = QDoubleSpinBox()
@@ -145,35 +109,73 @@ class MotionTestSystem(QMainWindow):
         self.speed_spin.valueChanged.connect(self._update_timer_interval)
         speed_layout.addWidget(self.speed_spin)
         play_layout.addLayout(speed_layout)
+
+        # 3D表示トグル（ローカル軸の表示/非表示）
+        self.show_axes_checkbox = QCheckBox("関節のローカル座標軸を表示")
+        self.show_axes_checkbox.setChecked(True)
+        self.show_axes_checkbox.stateChanged.connect(self.toggle_axes_visibility)
+        play_layout.addWidget(self.show_axes_checkbox)
+
         play_group.setLayout(play_layout)
         control_layout.addWidget(play_group)
 
-        coordinate_group = QGroupBox("3. 座標から動作言語へエンコード")
-        coordinate_layout = QVBoxLayout()
+        # 3. 関節角度指定 ➔ 動作言語エンコード
+        angle_group = QGroupBox("3. 関節角度から動作言語へエンコード")
+        angle_layout = QVBoxLayout()
+        
         self.joint_combo = QComboBox()
-        self.joint_combo.addItems(self.COCO_JOINTS)
-        self.joint_combo.currentIndexChanged.connect(self._sync_coordinate_inputs)
-        coordinate_layout.addWidget(self.joint_combo)
-        values_layout = QHBoxLayout()
-        self.coordinate_spinboxes: list[QDoubleSpinBox] = []
-        for axis_name in ("X", "Y", "Z"):
-            values_layout.addWidget(QLabel(f"{axis_name}:"))
-            spinbox = QDoubleSpinBox()
-            spinbox.setRange(-1000.0, 1000.0)
-            spinbox.setDecimals(4)
-            spinbox.setSingleStep(0.1)
-            self.coordinate_spinboxes.append(spinbox)
-            values_layout.addWidget(spinbox)
-        coordinate_layout.addLayout(values_layout)
-        encode_button = QPushButton("座標更新してエンコード実行")
-        encode_button.clicked.connect(self.encode_from_coords)
-        coordinate_layout.addWidget(encode_button)
-        reset_button = QPushButton("姿勢を初期状態にリセット")
-        reset_button.clicked.connect(self.reset_pose)
-        coordinate_layout.addWidget(reset_button)
-        coordinate_group.setLayout(coordinate_layout)
-        control_layout.addWidget(coordinate_group)
+        self.joint_combo.addItems(m_config.JOINT_NAMES)  # 15関節を選択
+        self.joint_combo.currentIndexChanged.connect(self._sync_angle_inputs)
+        angle_layout.addWidget(self.joint_combo)
 
+        values_layout = QHBoxLayout()
+        self.angle_spinboxes: list[QDoubleSpinBox] = []
+        self.angle_sliders: list[QSlider] = []  # スライダーのリストを追加
+        axis_names = ("Roll (deg):", "Pitch (deg):", "Yaw (deg):")
+        
+        for axis_name in axis_names:
+            axis_layout = QVBoxLayout()
+            axis_layout.addWidget(QLabel(axis_name))
+            
+            # スライダーの設定
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(-180, 180)  # 角度可動域 (-180° 〜 180°)
+            slider.setValue(0)
+            self.angle_sliders.append(slider)
+            axis_layout.addWidget(slider)
+
+            # スピンボックスの設定
+            spinbox = QDoubleSpinBox()
+            spinbox.setRange(-180.0, 180.0)
+            spinbox.setDecimals(1)
+            spinbox.setSingleStep(1.0)
+            self.angle_spinboxes.append(spinbox)
+            axis_layout.addWidget(spinbox)
+
+            # スライダーとスピンボックスの値を互いに同期させる
+            slider.valueChanged.connect(lambda v, sb=spinbox: sb.setValue(v))
+            spinbox.valueChanged.connect(lambda v, sl=slider: sl.setValue(int(v)))
+
+            # ★ 追加：値が変わるたびにエンコード＆姿勢更新（ログ出力はスキップ） ★
+            spinbox.valueChanged.connect(lambda _: self.encode_from_angles(log_output=False))
+
+            values_layout.addLayout(axis_layout)
+            
+        angle_layout.addLayout(values_layout)
+
+        encode_button = QPushButton("角度更新してエンコード実行")
+        # ★ 変更：ボタン押下時はログを出力する
+        encode_button.clicked.connect(lambda: self.encode_from_angles(log_output=True))
+        angle_layout.addWidget(encode_button)
+
+        reset_button = QPushButton("姿勢を初期状態(全関節0°)にリセット")
+        reset_button.clicked.connect(self.reset_pose)
+        angle_layout.addWidget(reset_button)
+
+        angle_group.setLayout(angle_layout)
+        control_layout.addWidget(angle_group)
+
+        # 4. 動作言語から座標へデコード
         language_group = QGroupBox("4. 動作言語から座標へデコード")
         language_layout = QVBoxLayout()
         self.language_input = QTextEdit()
@@ -186,6 +188,7 @@ class MotionTestSystem(QMainWindow):
         language_group.setLayout(language_layout)
         control_layout.addWidget(language_group)
 
+        # 5. 計算過程ログ
         log_group = QGroupBox("5. 計算過程ログ")
         log_layout = QVBoxLayout()
         self.log_output = QTextEdit()
@@ -193,6 +196,7 @@ class MotionTestSystem(QMainWindow):
         log_layout.addWidget(self.log_output)
         log_group.setLayout(log_layout)
         control_layout.addWidget(log_group, stretch=1)
+
         main_layout.addLayout(control_layout, stretch=1)
 
         self.plotter = QtInteractor(self)
@@ -201,13 +205,41 @@ class MotionTestSystem(QMainWindow):
     def _init_3d_viewer(self) -> None:
         self.joint_meshes = []
         self.bone_meshes = []
+        self.axis_actors = []  # 各関節のローカル座標軸表示用
+
         left_indices = {3, 4, 5, 9, 10, 11}
         right_indices = {6, 7, 8, 12, 13, 14}
+        
+        # 15関節の球体メッシュおよび軸矢印
         for index in range(len(m_config.JOINT_NAMES)):
             color = "red" if index in left_indices else "blue" if index in right_indices else "green"
             self.joint_meshes.append(
-                self.plotter.add_mesh(pv.Sphere(radius=0.03), color=color)
+                self.plotter.add_mesh(pv.Sphere(radius=0.025), color=color)
             )
+            
+            axes = pv.Axes(show_actor=True)
+            actor = axes.axes_actor
+            
+            # ★ここが重要: 軸の「棒の長さ」を直接指定 (X, Y, Z)
+            actor.SetTotalLength(0.08, 0.08, 0.08) 
+            
+            # 文字ラベルを非表示
+            actor.SetXAxisLabelText("")
+            actor.SetYAxisLabelText("")
+            actor.SetZAxisLabelText("")
+            
+            # 矢印の太さ・先端コーンの比率調整
+            actor.SetShaftTypeToCylinder()               
+            actor.SetCylinderRadius(0.1)                # 軸の太さ
+            actor.SetConeRadius(0.5)                     # 矢印先端の太さ
+            actor.SetNormalizedTipLength(0.3, 0.3, 0.3)  # 全長に対する矢印部分の割合
+            
+            added_actor = self.plotter.add_actor(actor)
+            if isinstance(added_actor, tuple):
+                added_actor = added_actor[0]
+            self.axis_actors.append(added_actor)
+
+        # 骨（円柱）の生成
         self.bones_indices = [
             (m_config.JOINT_INDEX[parent], m_config.JOINT_INDEX[child])
             for child, parent in m_config.PARENTS.items()
@@ -225,12 +257,13 @@ class MotionTestSystem(QMainWindow):
                     color="gray",
                 )
             )
+
         self.plotter.show_bounds(
             bounds=(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0),
             location="outer",
             all_edges=True,
             ticks="both",
-            font_size=10,
+            font_size=8,
             xtitle="X Axis",
             ytitle="Y Axis",
             ztitle="Z Axis",
@@ -239,6 +272,16 @@ class MotionTestSystem(QMainWindow):
         self.plotter.add_axes(line_width=2)
         self.plotter.view_xy()
         self.plotter.camera.up = (0, 1, 0)
+
+    def toggle_axes_visibility(self, state: int) -> None:
+        """ローカル座標軸の表示/非表示を切り替え"""
+        visible = bool(state)
+        for actor in self.axis_actors:
+            if hasattr(actor, "SetVisibility"):
+                actor.SetVisibility(visible)
+            elif hasattr(actor, "visibility"):
+                actor.visibility = visible
+        self.plotter.render()
 
     def load_motion_file(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
@@ -266,40 +309,57 @@ class MotionTestSystem(QMainWindow):
         except (OSError, ValueError) as error:
             self.log_message(f"ファイル読み込みエラー: {error}")
 
-    def encode_from_coords(self) -> None:
+    def encode_from_angles(self, log_output: bool = True) -> None:
+        """指定された関節角度から動作言語へエンコードし、3D姿勢も同時に更新する"""
+        # PyQtのシグナル(clicked等)から呼ばれた際の引数(checked: bool)を補正
+        if not isinstance(log_output, bool):
+            log_output = True
+
         joint_index = self.joint_combo.currentIndex()
-        self.current_coords[0, joint_index] = [
-            spinbox.value() for spinbox in self.coordinate_spinboxes
+        self.manual_angles[0, joint_index] = [
+            spinbox.value() for spinbox in self.angle_spinboxes
         ]
         try:
-            angles = calc_angles.calculate_joint_angles(self.current_coords)
-            tokens = self.encoder.encode(angles)
+            tokens = self.encoder.encode(self.manual_angles)
             token_text = "\n".join(tokens)
             self.language_input.setPlainText(token_text)
-            self.log_message(
-                f"エンコード完了: {self.COCO_JOINTS[joint_index]} を更新\n"
-                f"Euler角形状: {angles.shape}\n動作言語:\n{token_text}"
-            )
+
+            # 角度から3D座標を順運動学(FK)で再構成してビューアに反映
+            coords = vis_motion.reconstruct_3d_positions(self.manual_angles)
+            self.sequence_angles = self.manual_angles.copy()
+            self.sequence_coords = coords
+            self.sequence_tokens = tokens
+            self.file_label.setText("手動角度入力")
+            self._set_frame(0)
+
+            # ★ スライダー操作中はログ出力しないように分岐 ★
+            if log_output:
+                joint_name = m_config.JOINT_NAMES[joint_index]
+                r, p, y = self.manual_angles[0, joint_index]
+                self.log_message(
+                    f"エンコード完了: 関節[{joint_name}] ➔ Roll:{r:.1f}°, Pitch:{p:.1f}°, Yaw:{y:.1f}°\n"
+                    f"動作言語:\n{token_text}"
+                )
         except (TypeError, ValueError) as error:
-            self.log_message(f"エンコードエラー: {error}")
+            if log_output:
+                self.log_message(f"エンコードエラー: {error}")
 
     def reset_pose(self, log_message: bool = True) -> None:
-        """Reset the editable pose and refresh the viewer through motion language."""
-        self.current_coords = create_t_pose_coordinates()
+        """すべての関節角度を0°にリセットし、可視化と動作言語を更新する"""
+        self.manual_angles = np.zeros((1, len(m_config.JOINT_NAMES), 3), dtype=float)
         try:
-            angles = calc_angles.calculate_joint_angles(self.current_coords)
-            self.sequence_tokens = self.encoder.encode(angles)
+            self.sequence_tokens = self.encoder.encode(self.manual_angles)
             token_text = "\n".join(self.sequence_tokens)
             self.language_input.setPlainText(token_text)
-            self.sequence_angles = angles
-            self.sequence_coords = coco_to_skeleton_positions(self.current_coords)
-            self.file_label.setText("初期姿勢")
+            self.sequence_angles = self.manual_angles.copy()
+            self.sequence_coords = vis_motion.reconstruct_3d_positions(self.manual_angles)
+            self.file_label.setText("初期姿勢 (全関節0°)")
             self._set_frame(0)
-            self._sync_coordinate_inputs(self.joint_combo.currentIndex())
+            self._sync_angle_inputs(self.joint_combo.currentIndex())
             if log_message:
-                self.log_message("姿勢を初期状態にリセットしました")
+                self.log_message("関節角度を初期状態 (0°) にリセットしました")
         except (TypeError, ValueError) as error:
-            self.log_message(f"初期姿勢の更新エラー: {error}")
+            self.log_message(f"初期姿勢のリセットエラー: {error}")
 
     def decode_from_language(self) -> None:
         token_text = self.language_input.toPlainText().strip()
@@ -310,6 +370,12 @@ class MotionTestSystem(QMainWindow):
             self.sequence_tokens = [line for line in token_text.splitlines() if line.strip()]
             self.sequence_angles = self.decoder.decode_lines(self.sequence_tokens)
             self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
+            
+            # デコードされた1フレーム目の角度を手動角度入力用バッファにも反映
+            if len(self.sequence_angles) > 0:
+                self.manual_angles = self.sequence_angles[0:1].copy()
+                self._sync_angle_inputs(self.joint_combo.currentIndex())
+
             self.file_label.setText("手動入力")
             self._set_frame(0)
             self.log_message(
@@ -320,12 +386,19 @@ class MotionTestSystem(QMainWindow):
         except ValueError as error:
             self.log_message(f"デコードエラー: {error}")
 
-    def _sync_coordinate_inputs(self, index: int) -> None:
-        if not hasattr(self, "coordinate_spinboxes"):
+    def _sync_angle_inputs(self, index: int) -> None:
+        """選択された関節の現在の角度 [Roll, Pitch, Yaw] をスピンボックスとスライダーに同期"""
+        if not hasattr(self, "angle_spinboxes"):
             return
-        for spinbox, value in zip(self.coordinate_spinboxes, self.current_coords[0, index]):
+        for spinbox, slider, value in zip(self.angle_spinboxes, self.angle_sliders, self.manual_angles[0, index]):
+            # シグナルループを防ぐため一時的にイベントをブロック
             spinbox.blockSignals(True)
+            slider.blockSignals(True)
+            
             spinbox.setValue(float(value))
+            slider.setValue(int(value))
+            
+            slider.blockSignals(False)
             spinbox.blockSignals(False)
 
     def _set_frame(self, frame_index: int) -> None:
@@ -343,7 +416,10 @@ class MotionTestSystem(QMainWindow):
         self.frame_label.setText(
             f"Frame: {self.current_frame_idx + 1} / {len(self.sequence_coords)}"
         )
-        self.update_3d_visualization(self.sequence_coords[self.current_frame_idx])
+        self.update_3d_visualization(
+            self.sequence_coords[self.current_frame_idx],
+            self.sequence_angles[self.current_frame_idx],
+        )
 
     def seek_frame(self, frame_index: int) -> None:
         self._set_frame(frame_index)
@@ -383,12 +459,26 @@ class MotionTestSystem(QMainWindow):
     def _update_timer_interval(self) -> None:
         self.timer.setInterval(int(self.speed_spin.value()))
 
-    def update_3d_visualization(self, joint_positions: np.ndarray) -> None:
+    def update_3d_visualization(
+        self, joint_positions: np.ndarray, joint_angles: np.ndarray
+    ) -> None:
         positions = np.asarray(joint_positions, dtype=float)
         if positions.shape != (len(m_config.JOINT_NAMES), 3):
             raise ValueError("joint_positions must have shape (15, 3)")
-        for actor, position in zip(self.joint_meshes, positions):
-            actor.user_matrix = self._translation_matrix(position)
+        angles = np.asarray(joint_angles, dtype=float)
+        if angles.shape != (len(m_config.JOINT_NAMES), 3):
+            raise ValueError("joint_angles must have shape (15, 3)")
+        rotations = vis_motion.reconstruct_global_rotations(angles[np.newaxis, ...])[0]
+
+        # 各関節の球体とミニ座標軸を更新
+        for index, (actor, axis_actor, position) in enumerate(zip(self.joint_meshes, self.axis_actors, positions)):
+            trans_mat = self._translation_matrix(position)
+            self._set_actor_matrix(actor, trans_mat)
+            axis_transform = trans_mat.copy()
+            axis_transform[:3, :3] = rotations[index]
+            self._set_actor_matrix(axis_actor, axis_transform)
+
+        # 骨（円柱）を更新
         for actor, (parent_index, child_index) in zip(self.bone_meshes, self.bones_indices):
             start = positions[parent_index]
             end = positions[child_index]
@@ -398,10 +488,27 @@ class MotionTestSystem(QMainWindow):
                 actor.visibility = False
                 continue
             actor.visibility = True
-            actor.user_matrix = self._cylinder_transform(
-                (start + end) / 2.0, vector / length, length
+            self._set_actor_matrix(
+                actor, 
+                self._cylinder_transform((start + end) / 2.0, vector / length, length)
             )
         self.plotter.render()
+
+    @staticmethod
+    def _set_actor_matrix(actor, matrix: np.ndarray) -> None:
+        """PyVista / VTK アクターの型に応じて安全に行列（位置・姿勢）をセットする"""
+        if isinstance(actor, tuple):
+            actor = actor[0]
+            
+        if hasattr(actor, "user_matrix"):
+            actor.user_matrix = matrix
+        elif hasattr(actor, "SetUserMatrix"):
+            import vtk
+            vtk_mat = vtk.vtkMatrix4x4()
+            for r in range(4):
+                for c in range(4):
+                    vtk_mat.SetElement(r, c, float(matrix[r, c]))
+            actor.SetUserMatrix(vtk_mat)
 
     @staticmethod
     def _translation_matrix(position: np.ndarray) -> np.ndarray:

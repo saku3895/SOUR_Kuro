@@ -73,7 +73,7 @@ class PMDemoKuro(PeriodicModule):
         self.next_motion_interval = 0
 
         # 初期モーションもShiroに合わせてdemo_motion2スタートに変更
-        self.current_motion = self.demo_motion1
+        self.current_motion = self.demo_motion2
 
     def execute_periodic_task(self, lock, data_dict):
             super().execute_periodic_task(lock, data_dict)

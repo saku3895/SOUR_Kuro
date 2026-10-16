@@ -52,35 +52,53 @@ def _rotation_matrix(angles: np.ndarray) -> np.ndarray:
     return rz @ rx @ ry
 
 
-def reconstruct_3d_positions(euler_angles: np.ndarray) -> np.ndarray:
-    """Reconstruct ``(frames, 15, 3)`` positions with hips at the origin."""
+def _reconstruct_frame(frame_angles: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    positions = np.zeros((len(JOINT_NAMES), 3), dtype=float)
+    global_rotations = np.zeros((len(JOINT_NAMES), 3, 3), dtype=float)
+    hips_index = JOINT_INDEX["hips"]
+    global_rotations[hips_index] = _rotation_matrix(frame_angles[hips_index])
+
+    for child_name in JOINT_NAMES[1:]:
+        parent_name = PARENTS[child_name]
+        if parent_name is None:
+            raise ValueError(f"joint {child_name!r} has no parent")
+        bone = BONE_VECTORS[(parent_name, child_name)]
+        parent_index = JOINT_INDEX[parent_name]
+        child_index = JOINT_INDEX[child_name]
+        parent_rotation = global_rotations[parent_index]
+        positions[child_index] = positions[parent_index] + parent_rotation @ bone
+        global_rotations[child_index] = (
+            parent_rotation @ _rotation_matrix(frame_angles[child_index])
+        )
+    return positions, global_rotations
+
+
+def _validate_angles(euler_angles: np.ndarray) -> np.ndarray:
     angles = np.asarray(euler_angles, dtype=float)
     expected_shape = (len(JOINT_NAMES), 3)
     if angles.ndim != 3 or angles.shape[1:] != expected_shape:
         raise ValueError(f"euler_angles must have shape (frames, {expected_shape[0]}, 3)")
     if angles.shape[0] == 0 or not np.all(np.isfinite(angles)):
         raise ValueError("euler_angles must contain at least one finite frame")
+    return angles
 
+
+def reconstruct_3d_positions(euler_angles: np.ndarray) -> np.ndarray:
+    """Reconstruct ``(frames, 15, 3)`` positions with hips at the origin."""
+    angles = _validate_angles(euler_angles)
     positions = np.zeros_like(angles)
     for frame_index, frame_angles in enumerate(angles):
-        global_rotations = {
-            "hips": _rotation_matrix(frame_angles[JOINT_INDEX["hips"]])
-        }
-        for child_name in JOINT_NAMES[1:]:
-            parent_name = PARENTS[child_name]
-            if parent_name is None:
-                raise ValueError(f"joint {child_name!r} has no parent")
-            bone = BONE_VECTORS[(parent_name, child_name)]
-            parent_index = JOINT_INDEX[parent_name]
-            child_index = JOINT_INDEX[child_name]
-            parent_rotation = global_rotations[parent_name]
-            positions[frame_index, child_index] = (
-                positions[frame_index, parent_index] + parent_rotation @ bone
-            )
-            global_rotations[child_name] = (
-                parent_rotation @ _rotation_matrix(frame_angles[child_index])
-            )
+        positions[frame_index] = _reconstruct_frame(frame_angles)[0]
     return positions
+
+
+def reconstruct_global_rotations(euler_angles: np.ndarray) -> np.ndarray:
+    """Return global ``(frames, 15, 3, 3)`` joint rotations."""
+    angles = _validate_angles(euler_angles)
+    rotations = np.empty((len(angles), len(JOINT_NAMES), 3, 3), dtype=float)
+    for frame_index, frame_angles in enumerate(angles):
+        rotations[frame_index] = _reconstruct_frame(frame_angles)[1]
+    return rotations
 
 
 def animate_motion(
@@ -201,4 +219,9 @@ if __name__ == "__main__":
     main()
 
 
-__all__ = ["BONE_VECTORS", "animate_motion", "reconstruct_3d_positions"]
+__all__ = [
+    "BONE_VECTORS",
+    "animate_motion",
+    "reconstruct_3d_positions",
+    "reconstruct_global_rotations",
+]
