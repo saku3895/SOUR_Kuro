@@ -88,20 +88,7 @@ class PMDemoKuro(PeriodicModule):
                     if not self.current_motion.is_motion_finished():
                         position, time, interval = self.current_motion.get_next_motion()
 
-                    min_list = self.robot_properties.servo_min_positions[cite: 1]
-                    max_list = self.robot_properties.servo_max_positions[cite: 1]
-
-                    clamped_position = []
-                    for i in range(len(position)):
-                        # i番目のモーターの目標値を取り出し、i番目の最小・最大値内にクランプ
-                        pos = position[i]
-                        min_val = min_list[i]
-                        max_val = max_list[i]
-                        
-                        safe_pos = max(min_val, min(max_val, pos))
-                        clamped_position.append(safe_pos)
-    
-                        self.write_servo_positions(lock, data_dict, clamped_position, time)
+                        self.write_servo_positions(lock, data_dict, position, time)
     
                         self.next_motion_interval = interval
                     else:
