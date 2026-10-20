@@ -47,7 +47,7 @@ JOINT_INDEX: Final[dict[str, int]] = {
 
 # Entries are (joint index, Euler axis index, range name, levels, minimum, maximum).
 # Euler axes are [Z, X, Y], i.e. [Roll, Pitch, Yaw] for this project.
-# motion_config.py の AXIS_MAPPING を以下に置き換え
+# motion_config.py の AXIS_MAPPING を以下に置き換え 
 AXIS_MAPPING: Final[dict[str, tuple[int, int, str, int, float, float]]] = {
     "A": (0, 0, "range", 11, -50, 50),   # 11分割で 0° がレベル5の中央値(0°)に
     "B": (0, 1, "range", 11, -50, 50),
