@@ -1,0 +1,23 @@
+{
+  "pose_name": "t_pose",
+  "scale": 1.0,
+  "keypoints": {
+    "nose": [0.0, 0.72, 0.0],
+    "lefteye": [-0.03, 0.7, 0.0],
+    "righteye": [0.03, 0.7, 0.0],
+    "leftear": [-0.09, 0.67, 0.0],
+    "rightear": [0.09, 0.67, 0.0],
+    "leftshoulder": [-0.18, 0.5, 0.0],
+    "rightshoulder": [0.18, 0.5, 0.0],
+    "leftelbow": [-0.45, 0.5, 0.0],
+    "rightelbow": [0.45, 0.5, 0.0],
+    "leftwrist": [-0.68, 0.5, 0.0],
+    "rightwrist": [0.68, 0.5, 0.0],
+    "lefthip": [-0.1, 0.0, 0.0],
+    "righthip": [0.1, 0.0, 0.0],
+    "leftknee": [-0.1, -0.4, 0.0],
+    "rightknee": [0.1, -0.4, 0.0],
+    "leftankle": [-0.1, -0.8, 0.0],
+    "rightankle": [0.1, -0.8, 0.0]
+  }
+}

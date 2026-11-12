@@ -32,6 +32,8 @@ from PyQt6.QtWidgets import (
 
 from pose_estimation import motion_config as m_config
 from pose_estimation import motion_language as m_lang
+from pose_estimation import calculate_joint_angles as calc_angles
+from pose_estimation.keypoint_json import load_keypoints_json
 from pose_estimation import visualize_motion as vis_motion
 
 
@@ -50,6 +52,8 @@ class MotionTestSystem(QMainWindow):
         self.sequence_angles = self.manual_angles.copy()
         self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
         self.sequence_tokens: list[str] = []
+        self.sequence_keypoints: np.ndarray | None = None
+        self.input_mode = "angles"
         self.current_frame_idx = 0
 
         self.timer = QTimer(self)
@@ -77,6 +81,14 @@ class MotionTestSystem(QMainWindow):
         file_layout.addWidget(self.file_label)
         file_group.setLayout(file_layout)
         control_layout.addWidget(file_group)
+
+        keypoint_group = QGroupBox("座標JSONファイル")
+        keypoint_layout = QVBoxLayout()
+        keypoint_button = QPushButton("17点座標JSONを選択")
+        keypoint_button.clicked.connect(self.load_keypoint_file)
+        keypoint_layout.addWidget(keypoint_button)
+        keypoint_group.setLayout(keypoint_layout)
+        control_layout.addWidget(keypoint_group)
 
         # 2. 連続再生・ステップ確認
         play_group = QGroupBox("2. 連続再生・ステップ確認")
@@ -206,6 +218,8 @@ class MotionTestSystem(QMainWindow):
         self.joint_meshes = []
         self.bone_meshes = []
         self.axis_actors = []  # 各関節のローカル座標軸表示用
+        self.keypoint_meshes = []
+        self.keypoint_bone_meshes = []
 
         left_indices = {3, 4, 5, 9, 10, 11}
         right_indices = {6, 7, 8, 12, 13, 14}
@@ -258,6 +272,30 @@ class MotionTestSystem(QMainWindow):
                 )
             )
 
+        self.keypoint_bones_indices = [
+            (0, 1), (1, 3), (0, 2), (2, 4),
+            (5, 7), (7, 9), (6, 8), (8, 10),
+            (5, 6), (5, 11), (6, 12), (11, 12),
+            (11, 13), (13, 15), (12, 14), (14, 16),
+        ]
+        for index in range(17):
+            self.keypoint_meshes.append(
+                self.plotter.add_mesh(pv.Sphere(radius=0.025), color="orange")
+            )
+        for _ in self.keypoint_bones_indices:
+            self.keypoint_bone_meshes.append(
+                self.plotter.add_mesh(
+                    pv.Cylinder(
+                        center=(0, 0, 0),
+                        direction=(0, 1, 0),
+                        radius=0.01,
+                        height=1.0,
+                    ),
+                    color="purple",
+                )
+            )
+        self._set_keypoint_visibility(False)
+
         self.plotter.show_bounds(
             bounds=(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0),
             location="outer",
@@ -271,6 +309,8 @@ class MotionTestSystem(QMainWindow):
         )
         self.plotter.add_axes(line_width=2)
         self.plotter.view_xy()
+        # 正面（-Z方向）から見るため、view_xy()の視点をY軸周りに180度反転する。
+        self.plotter.camera.position = (0.0, 0.0, -1.0)
         self.plotter.camera.up = (0, 1, 0)
 
     def toggle_axes_visibility(self, state: int) -> None:
@@ -298,6 +338,8 @@ class MotionTestSystem(QMainWindow):
             ]
             self.sequence_angles = self.decoder.decode_lines(self.sequence_tokens)
             self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
+            self.sequence_keypoints = None
+            self.input_mode = "angles"
             self.file_label.setText(path.name)
             self._set_frame(0)
             self.log_message(
@@ -308,6 +350,60 @@ class MotionTestSystem(QMainWindow):
             )
         except (OSError, ValueError) as error:
             self.log_message(f"ファイル読み込みエラー: {error}")
+
+    def load_keypoint_file(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "17点座標JSONファイルを選択", str(Path.cwd()),
+            "JSON files (*.json);;All files (*)",
+        )
+        if not file_path:
+            return
+        try:
+            pose_name, scale, keypoints = load_keypoints_json(file_path)
+            self.sequence_keypoints = keypoints[np.newaxis, ...]
+            self.sequence_angles = calc_angles.calculate_joint_angles(self.sequence_keypoints)
+            self.sequence_coords = self._keypoints_to_joint_positions(keypoints)[np.newaxis, ...]
+            self.sequence_tokens = self.encoder.encode(self.sequence_angles)
+            self.manual_angles = self.sequence_angles[0:1].copy()
+            self.input_mode = "keypoints"
+            self.file_label.setText(Path(file_path).name)
+            self._sync_angle_inputs(self.joint_combo.currentIndex())
+            self._set_frame(0)
+            self.log_message(
+                f"座標JSON読み込み完了: {pose_name}\n"
+                f"scale: {scale:g}\n"
+                f"角度形状: {self.sequence_angles.shape}\n"
+                f"座標形状: {self.sequence_keypoints.shape}"
+            )
+        except (OSError, ValueError) as error:
+            self.log_message(f"座標JSON読み込みエラー: {error}")
+
+    @staticmethod
+    def _keypoints_to_joint_positions(keypoints: np.ndarray) -> np.ndarray:
+        points = {name: keypoints[index] for name, index in calc_angles.COCO_INDEX.items()}
+        positions = np.empty((len(m_config.JOINT_NAMES), 3), dtype=float)
+        positions[m_config.JOINT_INDEX["hips"]] = (points["lefthip"] + points["righthip"]) / 2
+        positions[m_config.JOINT_INDEX["neck"]] = (
+            points["leftshoulder"] + points["rightshoulder"]
+        ) / 2
+        positions[m_config.JOINT_INDEX["head"]] = np.mean(
+            [points["nose"], points["lefteye"], points["righteye"],
+             points["leftear"], points["rightear"]],
+            axis=0,
+        )
+        for side in ("L", "R"):
+            source = "left" if side == "L" else "right"
+            for joint in ("shoulder", "elbow", "wrist", "hip", "knee", "ankle"):
+                positions[m_config.JOINT_INDEX[f"{side}_{joint}"]] = points[f"{source}{joint}"]
+        return positions
+
+    def _set_keypoint_visibility(self, visible: bool) -> None:
+        for actor in (*self.keypoint_meshes, *self.keypoint_bone_meshes):
+            actor.visibility = visible
+
+    def _set_joint_visibility(self, visible: bool) -> None:
+        for actor in (*self.joint_meshes, *self.bone_meshes):
+            actor.visibility = visible
 
     def encode_from_angles(self, log_output: bool = True) -> None:
         """指定された関節角度から動作言語へエンコードし、3D姿勢も同時に更新する"""
@@ -353,6 +449,8 @@ class MotionTestSystem(QMainWindow):
             self.language_input.setPlainText(token_text)
             self.sequence_angles = self.manual_angles.copy()
             self.sequence_coords = vis_motion.reconstruct_3d_positions(self.manual_angles)
+            self.sequence_keypoints = None
+            self.input_mode = "angles"
             self.file_label.setText("初期姿勢 (全関節0°)")
             self._set_frame(0)
             self._sync_angle_inputs(self.joint_combo.currentIndex())
@@ -370,6 +468,8 @@ class MotionTestSystem(QMainWindow):
             self.sequence_tokens = [line for line in token_text.splitlines() if line.strip()]
             self.sequence_angles = self.decoder.decode_lines(self.sequence_tokens)
             self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
+            self.sequence_keypoints = None
+            self.input_mode = "angles"
             
             # デコードされた1フレーム目の角度を手動角度入力用バッファにも反映
             if len(self.sequence_angles) > 0:
@@ -416,10 +516,16 @@ class MotionTestSystem(QMainWindow):
         self.frame_label.setText(
             f"Frame: {self.current_frame_idx + 1} / {len(self.sequence_coords)}"
         )
-        self.update_3d_visualization(
-            self.sequence_coords[self.current_frame_idx],
-            self.sequence_angles[self.current_frame_idx],
-        )
+        if self.input_mode == "keypoints" and self.sequence_keypoints is not None:
+            self.update_keypoint_visualization(
+                self.sequence_keypoints[self.current_frame_idx],
+                self.sequence_angles[self.current_frame_idx],
+            )
+        else:
+            self.update_3d_visualization(
+                self.sequence_coords[self.current_frame_idx],
+                self.sequence_angles[self.current_frame_idx],
+            )
 
     def seek_frame(self, frame_index: int) -> None:
         self._set_frame(frame_index)
@@ -469,6 +575,8 @@ class MotionTestSystem(QMainWindow):
         if angles.shape != (len(m_config.JOINT_NAMES), 3):
             raise ValueError("joint_angles must have shape (15, 3)")
         rotations = vis_motion.reconstruct_global_rotations(angles[np.newaxis, ...])[0]
+        self._set_joint_visibility(True)
+        self._set_keypoint_visibility(False)
 
         # 各関節の球体とミニ座標軸を更新
         for index, (actor, axis_actor, position) in enumerate(zip(self.joint_meshes, self.axis_actors, positions)):
@@ -492,6 +600,38 @@ class MotionTestSystem(QMainWindow):
                 actor, 
                 self._cylinder_transform((start + end) / 2.0, vector / length, length)
             )
+        self.plotter.render()
+
+    def update_keypoint_visualization(
+        self, keypoints: np.ndarray, joint_angles: np.ndarray
+    ) -> None:
+        points = np.asarray(keypoints, dtype=float)
+        if points.shape != (17, 3):
+            raise ValueError("keypoints must have shape (17, 3)")
+        self._set_joint_visibility(False)
+        self._set_keypoint_visibility(True)
+        for actor, position in zip(self.keypoint_meshes, points):
+            self._set_actor_matrix(actor, self._translation_matrix(position))
+        for actor, (parent_index, child_index) in zip(
+            self.keypoint_bone_meshes, self.keypoint_bones_indices
+        ):
+            start = points[parent_index]
+            end = points[child_index]
+            vector = end - start
+            length = float(np.linalg.norm(vector))
+            actor.visibility = length > 1e-8
+            if actor.visibility:
+                self._set_actor_matrix(
+                    actor,
+                    self._cylinder_transform(
+                        (start + end) / 2.0, vector / length, length
+                    ),
+                )
+        self.update_3d_visualization(
+            self._keypoints_to_joint_positions(points), joint_angles
+        )
+        self._set_joint_visibility(False)
+        self._set_keypoint_visibility(True)
         self.plotter.render()
 
     @staticmethod
