@@ -30,7 +30,11 @@ def parse_keypoints_json(data: Any) -> tuple[str, float, np.ndarray]:
     if not isinstance(keypoints, dict):
         raise ValueError("keypoints objectが必要です")
 
-    missing = [name for name in COCO_INDEX if name not in keypoints]
+    normalized_keypoints = {
+        str(name).replace("_", "").lower(): value
+        for name, value in keypoints.items()
+    }
+    missing = [name for name in COCO_INDEX if name not in normalized_keypoints]
     if missing:
         raise ValueError(f"keypointsが不足しています: {', '.join(missing)}")
 
@@ -43,7 +47,7 @@ def parse_keypoints_json(data: Any) -> tuple[str, float, np.ndarray]:
 
     points = np.empty((len(COCO_INDEX), 3), dtype=float)
     for name, index in COCO_INDEX.items():
-        value = keypoints[name]
+        value = normalized_keypoints[name]
         if not isinstance(value, (list, tuple)) or len(value) != 3:
             raise ValueError(f"{name}の座標は3要素の配列である必要があります")
         try:

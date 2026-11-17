@@ -8,12 +8,34 @@ from collections.abc import Iterable
 import numpy as np
 
 try:
-    from .motion_config import AXIS_IDS, AXIS_MAPPING
+    from .motion_config import AXIS_IDS, AXIS_MAPPING, T_POSE_OFFSETS
 except ImportError:
-    from motion_config import AXIS_IDS, AXIS_MAPPING
+    from motion_config import AXIS_IDS, AXIS_MAPPING, T_POSE_OFFSETS
 
 
 _TOKEN = re.compile(r"([A-Z]+)(\d+)")
+
+
+def to_motion_angles(absolute_angles: np.ndarray) -> np.ndarray:
+    """Convert pose-estimation angles to T-pose-relative motion angles."""
+    values = np.asarray(absolute_angles, dtype=float)
+    offsets = np.asarray(T_POSE_OFFSETS, dtype=float)
+    if values.ndim != 3 or values.shape[1:] != (15, 3):
+        raise ValueError("absolute_angles must have shape (frames, 15, 3)")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("absolute_angles must contain finite values")
+    return values - offsets[np.newaxis, ...]
+
+
+def from_motion_angles(motion_angles: np.ndarray) -> np.ndarray:
+    """Convert T-pose-relative motion angles to pose-estimation angles."""
+    values = np.asarray(motion_angles, dtype=float)
+    offsets = np.asarray(T_POSE_OFFSETS, dtype=float)
+    if values.ndim != 3 or values.shape[1:] != (15, 3):
+        raise ValueError("motion_angles must have shape (frames, 15, 3)")
+    if not np.all(np.isfinite(values)):
+        raise ValueError("motion_angles must contain finite values")
+    return values + offsets[np.newaxis, ...]
 
 
 class MotionLanguageEncoder:
@@ -109,4 +131,9 @@ class MotionLanguageDecoder:
             return self.decode(input_file)
 
 
-__all__ = ["MotionLanguageDecoder", "MotionLanguageEncoder"]
+__all__ = [
+    "MotionLanguageDecoder",
+    "MotionLanguageEncoder",
+    "from_motion_angles",
+    "to_motion_angles",
+]

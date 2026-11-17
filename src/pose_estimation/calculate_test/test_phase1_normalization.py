@@ -289,14 +289,14 @@ class TestNormalizationEdgeCases:
         with pytest.raises(ValueError, match="zero-length vector for body"):
             calculate_joint_angles(impossible_pose)
 
-    def test_zero_length_vector_shoulder_raises_value_error(self, tpose_coco):
+    def test_zero_length_vector_body_raises_value_error(self, tpose_coco):
         """
-        左右の肩が完全一致（距離0）している場合、
-        ゼロ除算を防ぐため ValueError が送出されること。
+        腰と首が完全一致している場合、
+        体幹の長手方向を構築できないため ValueError が送出されること。
         """
         corrupted = tpose_coco.copy()
-        # 左肩と右肩を同一点にする（体幹フレーム構築時にゼロ長ベクトル）
-        corrupted[COCO_INDEX["rightshoulder"]] = corrupted[COCO_INDEX["leftshoulder"]]
+        corrupted[COCO_INDEX["leftshoulder"]] = corrupted[COCO_INDEX["lefthip"]]
+        corrupted[COCO_INDEX["rightshoulder"]] = corrupted[COCO_INDEX["righthip"]]
 
         with pytest.raises(ValueError, match="zero-length vector"):
             calculate_joint_angles(corrupted[np.newaxis, ...])

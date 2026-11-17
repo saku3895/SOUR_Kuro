@@ -12,12 +12,12 @@ from pathlib import Path
 try:
     from .calculate_joint_angles import calculate_joint_angles
     from .motion_trigger import MotionTriggerEngine
-    from .motion_language import MotionLanguageEncoder
+    from .motion_language import MotionLanguageEncoder, to_motion_angles
     from .motion_log import save_motion_log
 except ImportError:
     from calculate_joint_angles import calculate_joint_angles
     from motion_trigger import MotionTriggerEngine
-    from motion_language import MotionLanguageEncoder
+    from motion_language import MotionLanguageEncoder, to_motion_angles
     from motion_log import save_motion_log
 
 NUM_JOINTS = 17
@@ -75,7 +75,7 @@ def save_motion_sequence(angle_sequence):
     if angle_sequence is None or len(angle_sequence) == 0:
         return None
 
-    motion_language = motion_encoder.encode_sequence(angle_sequence)
+    motion_language = motion_encoder.encode_sequence(to_motion_angles(angle_sequence))
     motion_log_path = save_motion_log(
         motion_language,
         Path(__file__).resolve().parents[2] / "data_logs" / "motion",

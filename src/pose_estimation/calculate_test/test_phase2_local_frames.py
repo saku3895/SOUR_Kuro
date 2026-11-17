@@ -4,7 +4,7 @@
 検証内容:
 1. 各関節のローカル座標系（X, Y, Z基底）の完全な直交性（内積が 1e-10 以下でゼロ）
 2. ローカル座標系が正規直交基底（各軸のノルム = 1.0）かつ右手系（det = 1.0）であること
-3. 各関節のローカルX軸と実際のボーン方向ベクトルとのコサイン類似度（完全一致 = 1.0）
+3. 各関節のローカルY軸と実際のボーン方向ベクトルとのコサイン類似度（完全一致 = 1.0）
 4. 回転行列からオイラー角（Z-X-Y順）への正確な変換（T字ポーズ屈曲関節 = 0.0° 等）
 5. ジンバルロック特異点や極端な姿勢における数値安定性（NaN/Infの非発生）
 """
@@ -105,9 +105,9 @@ class TestBoneDirectionCosineSimilarity:
     """各関節のローカル軸がボーンの幾何学的方向と完全に一致しているかの検証。"""
 
     @pytest.mark.parametrize("fixture_name", ["tpose_coco", "squat_coco", "raised_left_arm_coco"])
-    def test_local_x_axis_matches_bone_direction_cosine_similarity(self, request, fixture_name):
+    def test_local_y_axis_matches_bone_direction_cosine_similarity(self, request, fixture_name):
         """
-        各関節のローカルX軸が、定義されたボーン方向ベクトルとコサイン類似度 1.0
+        各関節のローカルY軸が、定義されたボーン方向ベクトルとコサイン類似度 1.0
         （空間上で完全に同じ方向）を向いていることを検証。
         """
         coco_frame = request.getfixturevalue(fixture_name)
@@ -116,47 +116,43 @@ class TestBoneDirectionCosineSimilarity:
 
         for joint in JOINT_NAMES[1:]:
             parent = PARENTS[joint]
-            if joint == "head":
-                expected_direction = points["nose"] - points["head"]
-            else:
-                child = _CHILDREN[joint]
-                expected_direction = (
-                    points[child] - points[joint] if child else points[joint] - points[parent]
-                )
+            child = _CHILDREN[joint]
+            expected_direction = (
+                points[child] - points[joint] if child else points[joint] - points[parent]
+            )
 
             # 期待される単位方向ベクトル
             expected_unit = expected_direction / np.linalg.norm(expected_direction)
-            # 関節フレームの X 軸（1列目）
-            actual_x_axis = frames[joint][:, 0]
+            # 関節フレームの Y 軸（2列目）
+            actual_y_axis = frames[joint][:, 1]
 
             # コサイン類似度（内積）
-            cosine_sim = float(np.dot(actual_x_axis, expected_unit))
+            cosine_sim = float(np.dot(actual_y_axis, expected_unit))
 
             np.testing.assert_allclose(
                 cosine_sim,
                 1.0,
                 atol=1e-10,
-                err_msg=f"関節 [{joint}] のローカルX軸とボーン方向ベクトルのコサイン類似度が 1.0 ではありません (sim={cosine_sim:.6f})",
+                err_msg=f"関節 [{joint}] のローカルY軸とボーン方向ベクトルのコサイン類似度が 1.0 ではありません (sim={cosine_sim:.6f})",
             )
 
-    def test_body_frame_x_axis_matches_shoulder_span_cosine_similarity(self, tpose_coco):
+    def test_body_frame_y_axis_matches_body_direction(self, tpose_coco):
         """
-        腰（hips / body_frame）のローカルX軸が、
-        左肩から右肩への方向ベクトルとコサイン類似度 1.0 であること。
+        腰（hips / body_frame）のローカルY軸が腰から首への方向を向くこと。
         """
         points = _named_points(tpose_coco)
         frames = _joint_frames(points)
 
-        shoulder_span = points["rightshoulder"] - points["leftshoulder"]
-        shoulder_unit = shoulder_span / np.linalg.norm(shoulder_span)
-        hips_x_axis = frames["hips"][:, 0]
+        body_direction = points["neck"] - points["hips"]
+        body_unit = body_direction / np.linalg.norm(body_direction)
+        hips_y_axis = frames["hips"][:, 1]
 
-        cosine_sim = float(np.dot(hips_x_axis, shoulder_unit))
+        cosine_sim = float(np.dot(hips_y_axis, body_unit))
         np.testing.assert_allclose(
             cosine_sim,
             1.0,
             atol=1e-10,
-            err_msg=f"hips の X軸と肩スパン方向のコサイン類似度が 1.0 ではありません (sim={cosine_sim:.6f})",
+            err_msg=f"hips の Y軸と腰から首方向のコサイン類似度が 1.0 ではありません (sim={cosine_sim:.6f})",
         )
 
 
@@ -186,10 +182,10 @@ class TestEulerAngleConversion:
             idx = JOINT_INDEX[name]
             joint_angles = angles[idx]
             np.testing.assert_allclose(
-                joint_angles,
+                joint_angles[1],
                 0.0,
                 atol=1e-5,
-                err_msg=f"T字ポーズにおいて関節 [{name}] の角度が 0.0° になっていません: {joint_angles}",
+                err_msg=f"T字ポーズにおいて関節 [{name}] の屈曲角が 0.0° になっていません: {joint_angles}",
             )
 
     def test_rotation_matrix_roundtrip_zxy(self, tpose_coco):
@@ -203,7 +199,11 @@ class TestEulerAngleConversion:
 
         for joint_index, joint in enumerate(JOINT_NAMES):
             parent = PARENTS[joint]
-            expected_relative = frames[joint] if parent is None else frames[parent].T @ frames[joint]
+            expected_relative = (
+                np.diag([1.0, -1.0, -1.0]).T @ frames[joint]
+                if parent is None
+                else frames[parent].T @ frames[joint]
+            )
 
             # 算出された角度から回転行列を再構成（Z-X-Y順、度数法）
             reconstructed_rot = Rotation.from_euler("zxy", angles[joint_index], degrees=True).as_matrix()

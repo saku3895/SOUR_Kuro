@@ -25,25 +25,36 @@ _CHILDREN = {
     "R_hip": "R_knee", "R_knee": "R_ankle", "R_ankle": None,
 }
 
+_CAMERA_NEUTRAL_ROTATION = np.diag([1.0, -1.0, -1.0])
 
-def _unit(vector: np.ndarray, label: str) -> np.ndarray:
+
+def _unit(vector: np.ndarray, label: str = "vector") -> np.ndarray:
     length = np.linalg.norm(vector)
     if length <= np.finfo(float).eps:
         raise ValueError(f"zero-length vector for {label}")
     return vector / length
 
 
-def _frame_from_direction(direction: np.ndarray, reference: np.ndarray, label: str) -> np.ndarray:
-    x_axis = _unit(direction, label)
-    y_axis = reference - np.dot(reference, x_axis) * x_axis
-    if np.linalg.norm(y_axis) <= np.finfo(float).eps:
-        fallback = np.array([1.0, 0.0, 0.0])
-        if abs(np.dot(fallback, x_axis)) > 0.9:
-            fallback = np.array([0.0, 0.0, 1.0])
-        y_axis = fallback - np.dot(fallback, x_axis) * x_axis
-    y_axis = _unit(y_axis, f"{label} reference")
-    z_axis = _unit(np.cross(x_axis, y_axis), f"{label} cross product")
-    y_axis = _unit(np.cross(z_axis, x_axis), f"{label} orthogonal axis")
+def _build_frame(
+    y_vec: np.ndarray,
+    ref_vec: np.ndarray,
+    kind: str,
+    label: str,
+) -> np.ndarray:
+    """Build a right-handed local frame with an explicit arm/leg convention."""
+    y_axis = _unit(y_vec, f"{label} bone Y")
+    reference = _unit(ref_vec, f"{label} reference")
+    if kind not in {"arm", "leg"}:
+        raise ValueError(f"unknown frame kind: {kind}")
+
+    # Arm: body-up x lateral-bone, Leg: body-right x vertical-bone.
+    # In both cases this explicitly makes Z the front/back axis.
+    z_axis = np.cross(reference, y_axis)
+    if np.linalg.norm(z_axis) <= np.finfo(float).eps * 10.0:
+        fallback = np.array([0.0, 0.0, 1.0])
+        z_axis = fallback - np.dot(fallback, y_axis) * y_axis
+    z_axis = _unit(z_axis, f"{label} lateral/front axis")
+    x_axis = _unit(np.cross(y_axis, z_axis), f"{label} X")
     return np.column_stack((x_axis, y_axis, z_axis))
 
 
@@ -63,22 +74,102 @@ def _named_points(frame: np.ndarray) -> dict[str, np.ndarray]:
 
 
 def _joint_frames(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    body_up = points["neck"] - points["hips"]
-    body_frame = _frame_from_direction(
-        points["rightshoulder"] - points["leftshoulder"], body_up, "body",
-    )
-    frames = {"hips": body_frame}
-    for joint in JOINT_NAMES[1:]:
-        parent = PARENTS[joint]
-        if joint == "head":
-            direction = points["nose"] - points["head"]
-            reference = points["rightear"] - points["leftear"]
+    """
+    腕と脚で計算ロジックおよび参照ベクトル（ref_vec）を明確に分けてローカル座標系を構築する。
+    - 腕: 参照ベクトル=body_up -> X軸は「上下方向」
+    - 脚: 参照ベクトル=body_lateral -> X軸は「左右方向」
+    """
+    # 体幹の上下ベクトル (hips -> neck)
+    body_up = _unit(points["neck"] - points["hips"], "body_up")
+    # 体幹の左右ベクトル (left_hip -> right_hip)
+    body_lateral = _unit(points["righthip"] - points["lefthip"], "body_lateral")
+
+    frames: dict[str, np.ndarray] = {}
+    for joint in JOINT_NAMES:
+        # ボーンベクトル（Y軸）の取得
+        if joint == "hips":
+            y_vec = points["neck"] - points["hips"]
+        elif joint == "head":
+            y_vec = points["head"] - points["neck"]
+            if np.linalg.norm(y_vec) <= np.finfo(float).eps:
+                y_vec = points["nose"] - points["head"]
         else:
             child = _CHILDREN[joint]
-            direction = points[child] - points[joint] if child else points[joint] - points[parent]
-            reference = body_frame[:, 1]
-        frames[joint] = _frame_from_direction(direction, reference, joint)
+            parent = PARENTS[joint]
+            y_vec = (
+                points[child] - points[joint]
+                if child
+                else points[joint] - points[parent]
+            )
+
+        # 腕系関節と脚・体幹系関節で計算を分岐
+        if joint in ("L_shoulder", "R_shoulder"):
+            side = "L" if joint.startswith("L_") else "R"
+            elbow = points[f"{side}_elbow"]
+            wrist = points[f"{side}_wrist"]
+            upper_arm = elbow - points[joint]
+            forearm = wrist - elbow
+            shoulder_frame = _build_arm_shoulder_frame(
+                upper_arm,
+                forearm,
+                body_up,
+                body_lateral,
+                joint,
+            )
+            elbow_frame, _ = _build_arm_elbow_frame(
+                shoulder_frame,
+                forearm,
+                joint,
+            )
+            frames[joint] = shoulder_frame
+            frames[f"{side}_elbow"] = elbow_frame
+            frames[f"{side}_wrist"] = elbow_frame
+            continue
+        if joint in ("L_elbow", "L_wrist", "R_elbow", "R_wrist"):
+            continue
+        frames[joint] = _build_frame(y_vec, body_lateral, "leg", joint)
+
     return frames
+
+
+def _build_arm_shoulder_frame(
+    upper_arm: np.ndarray,
+    forearm: np.ndarray,
+    body_up: np.ndarray,
+    body_lateral: np.ndarray,
+    label: str,
+) -> np.ndarray:
+    """Build a shoulder frame whose X axis is the elbow hinge axis."""
+    y_axis = _unit(upper_arm, f"{label} upper-arm Y")
+    reference_x = body_up - np.dot(body_up, y_axis) * y_axis
+    if np.linalg.norm(reference_x) <= np.finfo(float).eps * 10.0:
+        reference_x = body_lateral - np.dot(body_lateral, y_axis) * y_axis
+    reference_x = _unit(reference_x, f"{label} shoulder X reference")
+
+    hinge_x = np.cross(upper_arm, forearm)
+    if np.linalg.norm(hinge_x) <= np.finfo(float).eps * 10.0:
+        x_axis = reference_x
+    else:
+        x_axis = _unit(hinge_x, f"{label} elbow hinge X")
+        if np.dot(x_axis, reference_x) < 0.0:
+            x_axis = -x_axis
+
+    z_axis = _unit(np.cross(x_axis, y_axis), f"{label} shoulder Z")
+    return np.column_stack((x_axis, y_axis, z_axis))
+
+
+def _build_arm_elbow_frame(
+    shoulder_frame: np.ndarray,
+    forearm: np.ndarray,
+    label: str,
+) -> tuple[np.ndarray, float]:
+    """Build the elbow frame using only an X-axis hinge rotation."""
+    forearm_axis = _unit(forearm, f"{label} forearm Y")
+    y_axis = shoulder_frame[:, 1]
+    z_axis = shoulder_frame[:, 2]
+    angle = float(np.arctan2(np.dot(forearm_axis, z_axis), np.dot(forearm_axis, y_axis)))
+    rotation = Rotation.from_euler("x", angle).as_matrix()
+    return shoulder_frame @ rotation, angle
 
 
 def calculate_joint_angles(keypoints_3d: np.ndarray) -> np.ndarray:
@@ -97,7 +188,11 @@ def calculate_joint_angles(keypoints_3d: np.ndarray) -> np.ndarray:
         frames = _joint_frames(_named_points(frame))
         for joint_index, joint in enumerate(JOINT_NAMES):
             parent = PARENTS[joint]
-            relative = frames[joint] if parent is None else frames[parent].T @ frames[joint]
+            relative = (
+                _CAMERA_NEUTRAL_ROTATION.T @ frames[joint]
+                if parent is None
+                else frames[parent].T @ frames[joint]
+            )
             angles[frame_index, joint_index] = Rotation.from_matrix(relative).as_euler("zxy", degrees=True)
     return angles
 

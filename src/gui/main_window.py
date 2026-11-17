@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QSlider,
     QTextEdit,
@@ -35,6 +36,9 @@ from pose_estimation import motion_language as m_lang
 from pose_estimation import calculate_joint_angles as calc_angles
 from pose_estimation.keypoint_json import load_keypoints_json
 from pose_estimation import visualize_motion as vis_motion
+
+
+DEFAULT_POSE_PATH = Path(__file__).resolve().parents[2] / "data_logs" / "posture" / "t_pose.json"
 
 
 class MotionTestSystem(QMainWindow):
@@ -61,7 +65,21 @@ class MotionTestSystem(QMainWindow):
 
         self._init_ui()
         self._init_3d_viewer()
-        self.reset_pose(log_message=False)
+        self._load_pose_json(DEFAULT_POSE_PATH, log_message=False)
+
+    @staticmethod
+    def _t_pose_angles() -> np.ndarray:
+        """Return relative angles for the neutral T-pose in the Y-bone model."""
+        angles = np.zeros((len(m_config.JOINT_NAMES), 3), dtype=float)
+        # angles[:, 2] = 90.0
+        angles[m_config.JOINT_INDEX["hips"]] = (0.0, 0.0, 0.0)
+        # 腕を横（X軸方向）に上げるための純粋なRoll（Z軸）回転のみを設定
+        angles[m_config.JOINT_INDEX["L_shoulder"]] = (-90.0, 0.0, 0.0)
+        angles[m_config.JOINT_INDEX["R_shoulder"]] = (90.0, 0.0, 0.0)
+        # 脚は初期状態で既に下（Y軸方向）を向いているため、0で正常
+        angles[m_config.JOINT_INDEX["L_hip"]] = (0.0, 0.0, 0.0)
+        angles[m_config.JOINT_INDEX["R_hip"]] = (0.0, 0.0, 0.0)
+        return angles
 
     def _init_ui(self) -> None:
         central_widget = QWidget()
@@ -180,7 +198,7 @@ class MotionTestSystem(QMainWindow):
         encode_button.clicked.connect(lambda: self.encode_from_angles(log_output=True))
         angle_layout.addWidget(encode_button)
 
-        reset_button = QPushButton("姿勢を初期状態(全関節0°)にリセット")
+        reset_button = QPushButton("姿勢を初期状態(Tポーズ)にリセット")
         reset_button.clicked.connect(self.reset_pose)
         angle_layout.addWidget(reset_button)
 
@@ -200,19 +218,21 @@ class MotionTestSystem(QMainWindow):
         language_group.setLayout(language_layout)
         control_layout.addWidget(language_group)
 
-        # 5. 計算過程ログ
-        log_group = QGroupBox("5. 計算過程ログ")
-        log_layout = QVBoxLayout()
-        self.log_output = QTextEdit()
-        self.log_output.setReadOnly(True)
-        log_layout.addWidget(self.log_output)
-        log_group.setLayout(log_layout)
-        control_layout.addWidget(log_group, stretch=1)
-
         main_layout.addLayout(control_layout, stretch=1)
 
+        views_layout = QHBoxLayout()
+        keypoint_view_layout = QVBoxLayout()
+        keypoint_view_layout.addWidget(QLabel("17関節（入力JSON）"))
+        self.keypoint_plotter = QtInteractor(self)
+        keypoint_view_layout.addWidget(self.keypoint_plotter.interactor)
+        views_layout.addLayout(keypoint_view_layout)
+
+        joint_view_layout = QVBoxLayout()
+        joint_view_layout.addWidget(QLabel("15関節（関節角度から再構成）"))
         self.plotter = QtInteractor(self)
-        main_layout.addWidget(self.plotter.interactor, stretch=2)
+        joint_view_layout.addWidget(self.plotter.interactor)
+        views_layout.addLayout(joint_view_layout)
+        main_layout.addLayout(views_layout, stretch=3)
 
     def _init_3d_viewer(self) -> None:
         self.joint_meshes = []
@@ -231,27 +251,19 @@ class MotionTestSystem(QMainWindow):
                 self.plotter.add_mesh(pv.Sphere(radius=0.025), color=color)
             )
             
-            axes = pv.Axes(show_actor=True)
-            actor = axes.axes_actor
-            
-            # ★ここが重要: 軸の「棒の長さ」を直接指定 (X, Y, Z)
-            actor.SetTotalLength(0.08, 0.08, 0.08) 
-            
-            # 文字ラベルを非表示
-            actor.SetXAxisLabelText("")
-            actor.SetYAxisLabelText("")
-            actor.SetZAxisLabelText("")
-            
-            # 矢印の太さ・先端コーンの比率調整
-            actor.SetShaftTypeToCylinder()               
-            actor.SetCylinderRadius(0.1)                # 軸の太さ
-            actor.SetConeRadius(0.5)                     # 矢印先端の太さ
-            actor.SetNormalizedTipLength(0.3, 0.3, 0.3)  # 全長に対する矢印部分の割合
-            
-            added_actor = self.plotter.add_actor(actor)
-            if isinstance(added_actor, tuple):
-                added_actor = added_actor[0]
-            self.axis_actors.append(added_actor)
+            for axis_index, color in self._local_axis_specs(index):
+                actor = self.plotter.add_mesh(
+                    pv.Arrow(
+                        start=(0.0, 0.0, 0.0),
+                        direction=np.eye(3)[:, axis_index],
+                        scale=0.08,
+                        tip_length=0.25,
+                        tip_radius=0.08,
+                        shaft_radius=0.025,
+                    ),
+                    color=color,
+                )
+                self.axis_actors.append((index, axis_index, actor))
 
         # 骨（円柱）の生成
         self.bones_indices = [
@@ -280,11 +292,11 @@ class MotionTestSystem(QMainWindow):
         ]
         for index in range(17):
             self.keypoint_meshes.append(
-                self.plotter.add_mesh(pv.Sphere(radius=0.025), color="orange")
+                self.keypoint_plotter.add_mesh(pv.Sphere(radius=0.025), color="orange")
             )
         for _ in self.keypoint_bones_indices:
             self.keypoint_bone_meshes.append(
-                self.plotter.add_mesh(
+                self.keypoint_plotter.add_mesh(
                     pv.Cylinder(
                         center=(0, 0, 0),
                         direction=(0, 1, 0),
@@ -296,7 +308,8 @@ class MotionTestSystem(QMainWindow):
             )
         self._set_keypoint_visibility(False)
 
-        self.plotter.show_bounds(
+        for plotter in (self.plotter, self.keypoint_plotter):
+            plotter.show_bounds(
             bounds=(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0),
             location="outer",
             all_edges=True,
@@ -306,22 +319,34 @@ class MotionTestSystem(QMainWindow):
             ytitle="Y Axis",
             ztitle="Z Axis",
             color="black",
-        )
-        self.plotter.add_axes(line_width=2)
-        self.plotter.view_xy()
-        # 正面（-Z方向）から見るため、view_xy()の視点をY軸周りに180度反転する。
-        self.plotter.camera.position = (0.0, 0.0, -1.0)
-        self.plotter.camera.up = (0, 1, 0)
+            )
+            plotter.add_axes(line_width=2)
+            plotter.view_xy()
+            plotter.camera.position = (0.0, 0.0, -1.0)
+            plotter.camera.up = (0, -1, 0)
 
     def toggle_axes_visibility(self, state: int) -> None:
         """ローカル座標軸の表示/非表示を切り替え"""
         visible = bool(state)
-        for actor in self.axis_actors:
+        for _, _, actor in self.axis_actors:
             if hasattr(actor, "SetVisibility"):
                 actor.SetVisibility(visible)
             elif hasattr(actor, "visibility"):
                 actor.visibility = visible
         self.plotter.render()
+    
+    @staticmethod
+    def _local_axis_specs(index: int) -> tuple[tuple[int, str], ...]:
+        axis_map = {
+            "hips": (0, 1, 2), "neck": (0, 1, 2),
+            "L_shoulder": (0, 1, 2), "R_shoulder": (0, 1, 2),
+            "L_elbow": (0, 1), "R_elbow": (0, 1),
+            "L_hip": (0, 1, 2), "R_hip": (0, 1, 2),
+            "L_knee": (0,), "R_knee": (0,),
+        }
+        colors = ("red", "green", "blue")
+        name = m_config.JOINT_NAMES[index]
+        return tuple((axis, colors[axis]) for axis in axis_map.get(name, ()))
 
     def load_motion_file(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
@@ -336,10 +361,15 @@ class MotionTestSystem(QMainWindow):
                 line.strip() for line in path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             ]
-            self.sequence_angles = self.decoder.decode_lines(self.sequence_tokens)
+            motion_angles = self.decoder.decode_lines(self.sequence_tokens)
+            self.sequence_angles = m_lang.from_motion_angles(motion_angles)
             self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
-            self.sequence_keypoints = None
+            if self.sequence_keypoints is None:
+                _, _, keypoints = load_keypoints_json(DEFAULT_POSE_PATH)
+                self.sequence_keypoints = keypoints[np.newaxis, ...]
             self.input_mode = "angles"
+            self.manual_angles = motion_angles[0:1].copy()
+            self._sync_angle_inputs(self.joint_combo.currentIndex())
             self.file_label.setText(path.name)
             self._set_frame(0)
             self.log_message(
@@ -362,9 +392,10 @@ class MotionTestSystem(QMainWindow):
             pose_name, scale, keypoints = load_keypoints_json(file_path)
             self.sequence_keypoints = keypoints[np.newaxis, ...]
             self.sequence_angles = calc_angles.calculate_joint_angles(self.sequence_keypoints)
-            self.sequence_coords = self._keypoints_to_joint_positions(keypoints)[np.newaxis, ...]
-            self.sequence_tokens = self.encoder.encode(self.sequence_angles)
-            self.manual_angles = self.sequence_angles[0:1].copy()
+            self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
+            motion_angles = m_lang.to_motion_angles(self.sequence_angles)
+            self.sequence_tokens = self.encoder.encode(motion_angles)
+            self.manual_angles = motion_angles[0:1].copy()
             self.input_mode = "keypoints"
             self.file_label.setText(Path(file_path).name)
             self._sync_angle_inputs(self.joint_combo.currentIndex())
@@ -377,6 +408,30 @@ class MotionTestSystem(QMainWindow):
             )
         except (OSError, ValueError) as error:
             self.log_message(f"座標JSON読み込みエラー: {error}")
+
+    def _load_pose_json(self, path: Path, log_message: bool = True) -> None:
+        """Load a single 17-point pose as the initial JSON-backed state."""
+        try:
+            pose_name, scale, keypoints = load_keypoints_json(path)
+            self.sequence_keypoints = keypoints[np.newaxis, ...]
+            self.sequence_angles = calc_angles.calculate_joint_angles(self.sequence_keypoints)
+            self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
+            motion_angles = m_lang.to_motion_angles(self.sequence_angles)
+            self.sequence_tokens = self.encoder.encode(motion_angles)
+            self.manual_angles = motion_angles[0:1].copy()
+            self.input_mode = "keypoints"
+            self.file_label.setText(path.name)
+            self._sync_angle_inputs(self.joint_combo.currentIndex())
+            self._set_frame(0)
+            if log_message:
+                self.log_message(
+                    f"座標JSON読み込み完了: {pose_name}\n"
+                    f"scale: {scale:g}\n"
+                    f"角度形状: {self.sequence_angles.shape}\n"
+                    f"座標形状: {self.sequence_keypoints.shape}"
+                )
+        except (OSError, ValueError) as error:
+            self.log_message(f"初期姿勢の読み込みエラー: {error}")
 
     @staticmethod
     def _keypoints_to_joint_positions(keypoints: np.ndarray) -> np.ndarray:
@@ -400,6 +455,7 @@ class MotionTestSystem(QMainWindow):
     def _set_keypoint_visibility(self, visible: bool) -> None:
         for actor in (*self.keypoint_meshes, *self.keypoint_bone_meshes):
             actor.visibility = visible
+        self.keypoint_plotter.render()
 
     def _set_joint_visibility(self, visible: bool) -> None:
         for actor in (*self.joint_meshes, *self.bone_meshes):
@@ -421,8 +477,8 @@ class MotionTestSystem(QMainWindow):
             self.language_input.setPlainText(token_text)
 
             # 角度から3D座標を順運動学(FK)で再構成してビューアに反映
-            coords = vis_motion.reconstruct_3d_positions(self.manual_angles)
-            self.sequence_angles = self.manual_angles.copy()
+            self.sequence_angles = m_lang.from_motion_angles(self.manual_angles)
+            coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
             self.sequence_coords = coords
             self.sequence_tokens = tokens
             self.file_label.setText("手動角度入力")
@@ -441,23 +497,8 @@ class MotionTestSystem(QMainWindow):
                 self.log_message(f"エンコードエラー: {error}")
 
     def reset_pose(self, log_message: bool = True) -> None:
-        """すべての関節角度を0°にリセットし、可視化と動作言語を更新する"""
-        self.manual_angles = np.zeros((1, len(m_config.JOINT_NAMES), 3), dtype=float)
-        try:
-            self.sequence_tokens = self.encoder.encode(self.manual_angles)
-            token_text = "\n".join(self.sequence_tokens)
-            self.language_input.setPlainText(token_text)
-            self.sequence_angles = self.manual_angles.copy()
-            self.sequence_coords = vis_motion.reconstruct_3d_positions(self.manual_angles)
-            self.sequence_keypoints = None
-            self.input_mode = "angles"
-            self.file_label.setText("初期姿勢 (全関節0°)")
-            self._set_frame(0)
-            self._sync_angle_inputs(self.joint_combo.currentIndex())
-            if log_message:
-                self.log_message("関節角度を初期状態 (0°) にリセットしました")
-        except (TypeError, ValueError) as error:
-            self.log_message(f"初期姿勢のリセットエラー: {error}")
+        """Reset to the posture represented by ``t_pose.json``."""
+        self._load_pose_json(DEFAULT_POSE_PATH, log_message=False)
 
     def decode_from_language(self) -> None:
         token_text = self.language_input.toPlainText().strip()
@@ -466,14 +507,14 @@ class MotionTestSystem(QMainWindow):
             return
         try:
             self.sequence_tokens = [line for line in token_text.splitlines() if line.strip()]
-            self.sequence_angles = self.decoder.decode_lines(self.sequence_tokens)
+            motion_angles = self.decoder.decode_lines(self.sequence_tokens)
+            self.sequence_angles = m_lang.from_motion_angles(motion_angles)
             self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
-            self.sequence_keypoints = None
             self.input_mode = "angles"
             
             # デコードされた1フレーム目の角度を手動角度入力用バッファにも反映
             if len(self.sequence_angles) > 0:
-                self.manual_angles = self.sequence_angles[0:1].copy()
+                self.manual_angles = motion_angles[0:1].copy()
                 self._sync_angle_inputs(self.joint_combo.currentIndex())
 
             self.file_label.setText("手動入力")
@@ -490,14 +531,25 @@ class MotionTestSystem(QMainWindow):
         """選択された関節の現在の角度 [Roll, Pitch, Yaw] をスピンボックスとスライダーに同期"""
         if not hasattr(self, "angle_spinboxes"):
             return
-        for spinbox, slider, value in zip(self.angle_spinboxes, self.angle_sliders, self.manual_angles[0, index]):
-            # シグナルループを防ぐため一時的にイベントをブロック
+        joint_limits = {
+            axis: (minimum, maximum)
+            for joint_index, axis, _, _, minimum, maximum in m_config.AXIS_MAPPING.values()
+            if joint_index == index
+        }
+        for axis_index, (spinbox, slider, value) in enumerate(
+            zip(self.angle_spinboxes, self.angle_sliders, self.manual_angles[0, index])
+        ):
+            limits = joint_limits.get(axis_index)
+            enabled = limits is not None
+            minimum, maximum = limits if limits is not None else (-180.0, 180.0)
             spinbox.blockSignals(True)
             slider.blockSignals(True)
-            
-            spinbox.setValue(float(value))
-            slider.setValue(int(value))
-            
+            spinbox.setRange(minimum, maximum)
+            slider.setRange(int(minimum), int(maximum))
+            spinbox.setEnabled(enabled)
+            slider.setEnabled(enabled)
+            spinbox.setValue(float(np.clip(value, minimum, maximum)))
+            slider.setValue(int(np.clip(value, minimum, maximum)))
             slider.blockSignals(False)
             spinbox.blockSignals(False)
 
@@ -516,14 +568,16 @@ class MotionTestSystem(QMainWindow):
         self.frame_label.setText(
             f"Frame: {self.current_frame_idx + 1} / {len(self.sequence_coords)}"
         )
-        if self.input_mode == "keypoints" and self.sequence_keypoints is not None:
-            self.update_keypoint_visualization(
-                self.sequence_keypoints[self.current_frame_idx],
-                self.sequence_angles[self.current_frame_idx],
+        self.update_3d_visualization(
+            self.sequence_coords[self.current_frame_idx],
+            self.sequence_angles[self.current_frame_idx],
+        )
+        if self.sequence_keypoints is not None:
+            keypoint_index = min(
+                self.current_frame_idx, len(self.sequence_keypoints) - 1
             )
-        else:
-            self.update_3d_visualization(
-                self.sequence_coords[self.current_frame_idx],
+            self.update_keypoint_visualization(
+                self.sequence_keypoints[keypoint_index],
                 self.sequence_angles[self.current_frame_idx],
             )
 
@@ -578,13 +632,16 @@ class MotionTestSystem(QMainWindow):
         self._set_joint_visibility(True)
         self._set_keypoint_visibility(False)
 
-        # 各関節の球体とミニ座標軸を更新
-        for index, (actor, axis_actor, position) in enumerate(zip(self.joint_meshes, self.axis_actors, positions)):
+        # 各関節の球体と、許可されたローカル軸を更新
+        for index, (actor, position) in enumerate(zip(self.joint_meshes, positions)):
             trans_mat = self._translation_matrix(position)
             self._set_actor_matrix(actor, trans_mat)
-            axis_transform = trans_mat.copy()
-            axis_transform[:3, :3] = rotations[index]
-            self._set_actor_matrix(axis_actor, axis_transform)
+            for axis_index, joint_axis_index, axis_actor in self.axis_actors:
+                if axis_index != index:
+                    continue
+                axis_transform = trans_mat.copy()
+                axis_transform[:3, :3] = rotations[index]
+                self._set_actor_matrix(axis_actor, axis_transform)
 
         # 骨（円柱）を更新
         for actor, (parent_index, child_index) in zip(self.bone_meshes, self.bones_indices):
@@ -608,7 +665,6 @@ class MotionTestSystem(QMainWindow):
         points = np.asarray(keypoints, dtype=float)
         if points.shape != (17, 3):
             raise ValueError("keypoints must have shape (17, 3)")
-        self._set_joint_visibility(False)
         self._set_keypoint_visibility(True)
         for actor, position in zip(self.keypoint_meshes, points):
             self._set_actor_matrix(actor, self._translation_matrix(position))
@@ -627,12 +683,7 @@ class MotionTestSystem(QMainWindow):
                         (start + end) / 2.0, vector / length, length
                     ),
                 )
-        self.update_3d_visualization(
-            self._keypoints_to_joint_positions(points), joint_angles
-        )
-        self._set_joint_visibility(False)
-        self._set_keypoint_visibility(True)
-        self.plotter.render()
+        self.keypoint_plotter.render()
 
     @staticmethod
     def _set_actor_matrix(actor, matrix: np.ndarray) -> None:
@@ -680,13 +731,13 @@ class MotionTestSystem(QMainWindow):
         return transform
 
     def log_message(self, message: str) -> None:
-        self.log_output.append(message)
-        scrollbar = self.log_output.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        if "エラー" in message:
+            QMessageBox.critical(self, "エラー", message)
 
     def closeEvent(self, event) -> None:
         self.timer.stop()
         self.plotter.close()
+        self.keypoint_plotter.close()
         super().closeEvent(event)
 
 
@@ -712,7 +763,7 @@ def main() -> int:
     else:
         print("Warning: no Japanese-capable Qt font found; install fonts-noto-cjk.")
     window = MotionTestSystem()
-    window.show()
+    window.showMaximized()
     return app.exec()
 
 

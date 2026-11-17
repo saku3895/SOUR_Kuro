@@ -1,4 +1,4 @@
-"""Reconstruct and visualize the configured 15-joint skeleton."""
+"""Reconstruct and visualize the 15-joint skeleton in the camera RDF frame."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 try:
     from .motion_config import JOINT_INDEX, JOINT_NAMES, PARENTS
@@ -21,42 +22,40 @@ DEFAULT_INPUT = Path(__file__).resolve().parents[2] / "data_logs" / "motion_lang
 DEFAULT_FPS = 30
 AXIS_LIMITS = (-1.0, 1.0)
 
-# Vectors are expressed in the local frame of each parent, in metres.
+# Vectors are expressed in the neutral anatomical frame of each parent.
+# The root frame maps this frame to the camera (DepthAI RDF) frame.
 BONE_VECTORS = {
     ("hips", "neck"): np.array([0.0, 0.30, 0.0]),
     ("neck", "head"): np.array([0.0, 0.18, 0.0]),
     ("neck", "L_shoulder"): np.array([-0.18, 0.0, 0.0]),
-    ("L_shoulder", "L_elbow"): np.array([-0.27, 0.0, 0.0]),
-    ("L_elbow", "L_wrist"): np.array([-0.23, 0.0, 0.0]),
+    ("L_shoulder", "L_elbow"): np.array([0.0, 0.27, 0.0]),
+    ("L_elbow", "L_wrist"): np.array([0.0, 0.23, 0.0]),
     ("neck", "R_shoulder"): np.array([0.18, 0.0, 0.0]),
-    ("R_shoulder", "R_elbow"): np.array([0.27, 0.0, 0.0]),
-    ("R_elbow", "R_wrist"): np.array([0.23, 0.0, 0.0]),
+    ("R_shoulder", "R_elbow"): np.array([0.0, 0.27, 0.0]),
+    ("R_elbow", "R_wrist"): np.array([0.0, 0.23, 0.0]),
     ("hips", "L_hip"): np.array([-0.11, -0.05, 0.0]),
-    ("L_hip", "L_knee"): np.array([0.0, -0.40, 0.0]),
-    ("L_knee", "L_ankle"): np.array([0.0, -0.40, 0.0]),
+    ("L_hip", "L_knee"): np.array([0.0, 0.40, 0.0]),
+    ("L_knee", "L_ankle"): np.array([0.0, 0.40, 0.0]),
     ("hips", "R_hip"): np.array([0.11, -0.05, 0.0]),
-    ("R_hip", "R_knee"): np.array([0.0, -0.40, 0.0]),
-    ("R_knee", "R_ankle"): np.array([0.0, -0.40, 0.0]),
+    ("R_hip", "R_knee"): np.array([0.0, 0.40, 0.0]),
+    ("R_knee", "R_ankle"): np.array([0.0, 0.40, 0.0]),
 }
+
+CAMERA_NEUTRAL_ROTATION = np.diag([1.0, -1.0, -1.0])
 
 
 def _rotation_matrix(angles: np.ndarray) -> np.ndarray:
-    """Return ``Rz @ Rx @ Ry`` for [roll, pitch, yaw] degree angles."""
-    roll, pitch, yaw = np.radians(angles)
-    cz, sz = np.cos(roll), np.sin(roll)
-    cx, sx = np.cos(pitch), np.sin(pitch)
-    cy, sy = np.cos(yaw), np.sin(yaw)
-    rz = np.array([[cz, -sz, 0.0], [sz, cz, 0.0], [0.0, 0.0, 1.0]])
-    rx = np.array([[1.0, 0.0, 0.0], [0.0, cx, -sx], [0.0, sx, cx]])
-    ry = np.array([[cy, 0.0, sy], [0.0, 1.0, 0.0], [-sy, 0.0, cy]])
-    return rz @ rx @ ry
+    """Return the SciPy ``zxy`` rotation for [roll, pitch, yaw] degrees."""
+    return Rotation.from_euler("zxy", angles, degrees=True).as_matrix()
 
 
 def _reconstruct_frame(frame_angles: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     positions = np.zeros((len(JOINT_NAMES), 3), dtype=float)
     global_rotations = np.zeros((len(JOINT_NAMES), 3, 3), dtype=float)
     hips_index = JOINT_INDEX["hips"]
-    global_rotations[hips_index] = _rotation_matrix(frame_angles[hips_index])
+    global_rotations[hips_index] = (
+        CAMERA_NEUTRAL_ROTATION @ _rotation_matrix(frame_angles[hips_index])
+    )
 
     for child_name in JOINT_NAMES[1:]:
         parent_name = PARENTS[child_name]
@@ -125,7 +124,7 @@ def animate_motion(
     axis.set_ylim(*AXIS_LIMITS)
     axis.set_zlim(*AXIS_LIMITS)
     axis.set_box_aspect((1, 1, 1))
-    axis.view_init(elev=90.0, azim=-90.0)
+    axis.view_init(elev=-90.0, azim=-90.0)
 
     points = axis.scatter([], [], [], color="tab:blue", s=35)
     connections = [
@@ -221,6 +220,7 @@ if __name__ == "__main__":
 
 __all__ = [
     "BONE_VECTORS",
+    "CAMERA_NEUTRAL_ROTATION",
     "animate_motion",
     "reconstruct_3d_positions",
     "reconstruct_global_rotations",

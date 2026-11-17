@@ -22,6 +22,7 @@ from pose_estimation.calculate_joint_angles import (
 )
 from pose_estimation.motion_config import JOINT_INDEX, JOINT_NAMES, PARENTS
 from pose_estimation.calculate_test.conftest import pa_mpjpe, make_tpose_coco
+from pose_estimation.calculate_joint_angles import _CAMERA_NEUTRAL_ROTATION
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +86,11 @@ def forward_kinematics(
     for i, joint in enumerate(JOINT_NAMES):
         parent = PARENTS[joint]
         if parent is None:
-            global_frames[joint] = rel_rot[i]
+            global_frames[joint] = (
+                _CAMERA_NEUTRAL_ROTATION @ rel_rot[i]
+                if parent is None
+                else global_frames[parent] @ rel_rot[i]
+            )
         else:
             global_frames[joint] = global_frames[parent] @ rel_rot[i]
 
@@ -101,9 +106,9 @@ def forward_kinematics(
         positions[JOINT_INDEX["hips"]] + body_frame[:, 1] * bone_lengths["neck"]
     )
 
-    # head: neck の局所 X 軸方向に配置
+    # head: neck の局所 Y 軸方向に配置
     positions[JOINT_INDEX["head"]] = (
-        positions[JOINT_INDEX["neck"]] + global_frames["neck"][:, 0] * bone_lengths["head"]
+        positions[JOINT_INDEX["neck"]] + global_frames["neck"][:, 1] * bone_lengths["head"]
     )
 
     # 肩: neck から body_frame の X 軸方向（左右）に配置
@@ -114,23 +119,23 @@ def forward_kinematics(
         positions[JOINT_INDEX["neck"]] + body_frame[:, 0] * bone_lengths["shoulder_span_half"]
     )
 
-    # 腕関節: 各関節の局所 X 軸方向に沿って子関節を配置
+    # 腕関節: 各関節の局所 Y 軸方向に沿って子関節を配置
     upper_l = bone_lengths.get("upper_arm_L", bone_lengths.get("upper_arm", 0.27))
     fore_l = bone_lengths.get("forearm_L", bone_lengths.get("forearm", 0.23))
     upper_r = bone_lengths.get("upper_arm_R", bone_lengths.get("upper_arm", 0.27))
     fore_r = bone_lengths.get("forearm_R", bone_lengths.get("forearm", 0.23))
 
     positions[JOINT_INDEX["L_elbow"]] = (
-        positions[JOINT_INDEX["L_shoulder"]] + global_frames["L_shoulder"][:, 0] * upper_l
+        positions[JOINT_INDEX["L_shoulder"]] + global_frames["L_shoulder"][:, 1] * upper_l
     )
     positions[JOINT_INDEX["L_wrist"]] = (
-        positions[JOINT_INDEX["L_elbow"]] + global_frames["L_elbow"][:, 0] * fore_l
+        positions[JOINT_INDEX["L_elbow"]] + global_frames["L_elbow"][:, 1] * fore_l
     )
     positions[JOINT_INDEX["R_elbow"]] = (
-        positions[JOINT_INDEX["R_shoulder"]] + global_frames["R_shoulder"][:, 0] * upper_r
+        positions[JOINT_INDEX["R_shoulder"]] + global_frames["R_shoulder"][:, 1] * upper_r
     )
     positions[JOINT_INDEX["R_wrist"]] = (
-        positions[JOINT_INDEX["R_elbow"]] + global_frames["R_elbow"][:, 0] * fore_r
+        positions[JOINT_INDEX["R_elbow"]] + global_frames["R_elbow"][:, 1] * fore_r
     )
 
     # 股関節: hips から body_frame の X 軸方向（左右）に配置
@@ -141,23 +146,23 @@ def forward_kinematics(
         positions[JOINT_INDEX["hips"]] + body_frame[:, 0] * bone_lengths["hip_span_half"]
     )
 
-    # 脚関節: 各関節の局所 X 軸方向に沿って子関節を配置
+    # 脚関節: 各関節の局所 Y 軸方向に沿って子関節を配置
     thigh_l = bone_lengths.get("thigh_L", bone_lengths.get("thigh", 0.40))
     calf_l = bone_lengths.get("calf_L", bone_lengths.get("calf", 0.40))
     thigh_r = bone_lengths.get("thigh_R", bone_lengths.get("thigh", 0.40))
     calf_r = bone_lengths.get("calf_R", bone_lengths.get("calf", 0.40))
 
     positions[JOINT_INDEX["L_knee"]] = (
-        positions[JOINT_INDEX["L_hip"]] + global_frames["L_hip"][:, 0] * thigh_l
+        positions[JOINT_INDEX["L_hip"]] + global_frames["L_hip"][:, 1] * thigh_l
     )
     positions[JOINT_INDEX["L_ankle"]] = (
-        positions[JOINT_INDEX["L_knee"]] + global_frames["L_knee"][:, 0] * calf_l
+        positions[JOINT_INDEX["L_knee"]] + global_frames["L_knee"][:, 1] * calf_l
     )
     positions[JOINT_INDEX["R_knee"]] = (
-        positions[JOINT_INDEX["R_hip"]] + global_frames["R_hip"][:, 0] * thigh_r
+        positions[JOINT_INDEX["R_hip"]] + global_frames["R_hip"][:, 1] * thigh_r
     )
     positions[JOINT_INDEX["R_ankle"]] = (
-        positions[JOINT_INDEX["R_knee"]] + global_frames["R_knee"][:, 0] * calf_r
+        positions[JOINT_INDEX["R_knee"]] + global_frames["R_knee"][:, 1] * calf_r
     )
 
     return positions
