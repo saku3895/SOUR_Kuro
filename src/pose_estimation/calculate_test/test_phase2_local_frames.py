@@ -116,12 +116,16 @@ class TestBoneDirectionCosineSimilarity:
         points = _named_points(coco_frame)
         frames = _joint_frames(points)
 
-        for joint in JOINT_NAMES[1:]:
+        for joint in JOINT_NAMES:
             parent = PARENTS[joint]
-            child = _CHILDREN[joint]
-            expected_direction = (
-                points[child] - points[joint] if child else points[joint] - points[parent]
-            )
+            if joint == "hips":
+                expected_direction = points["neck"] - points["hips"]
+            else:
+                child = _CHILDREN[joint]
+                expected_direction = (
+                    points[child] - points[joint]
+                    if child else points[joint] - points[parent]
+                )
 
             # 期待される単位方向ベクトル
             expected_unit = expected_direction / np.linalg.norm(expected_direction)
@@ -137,25 +141,6 @@ class TestBoneDirectionCosineSimilarity:
                 atol=1e-10,
                 err_msg=f"関節 [{joint}] のローカルY軸とボーン方向ベクトルのコサイン類似度が 1.0 ではありません (sim={cosine_sim:.6f})",
             )
-
-    def test_body_frame_y_axis_matches_body_direction(self, tpose_coco):
-        """
-        腰（hips / body_frame）のローカルY軸が腰から首への方向を向くこと。
-        """
-        points = _named_points(tpose_coco)
-        frames = _joint_frames(points)
-
-        body_direction = points["neck"] - points["hips"]
-        body_unit = body_direction / np.linalg.norm(body_direction)
-        hips_y_axis = frames["hips"][:, 1]
-
-        cosine_sim = float(np.dot(hips_y_axis, body_unit))
-        np.testing.assert_allclose(
-            cosine_sim,
-            1.0,
-            atol=1e-10,
-            err_msg=f"hips の Y軸と腰から首方向のコサイン類似度が 1.0 ではありません (sim={cosine_sim:.6f})",
-        )
 
     def test_flexion_axes_are_normal_to_bone_planes(self):
         """実データの肘・膝の屈曲軸が各ボーン平面に垂直であることを確認する。"""
@@ -293,35 +278,3 @@ class TestEulerAngleConversion:
 
 
 # ---------------------------------------------------------------------------
-# 4. ジンバルロックおよび特異点のエッジケース検証
-# ---------------------------------------------------------------------------
-
-class TestGimbalLockAndSingularities:
-    """特異点付近の姿勢に対するオイラー角計算の安定性検証。"""
-
-    @pytest.mark.parametrize("fixture_name", ["tpose_coco", "squat_coco", "raised_left_arm_coco"])
-    def test_all_mock_postures_produce_finite_angles(self, request, fixture_name):
-        """すべてのモック姿勢入力に対して、NaN や Inf が一切発生しないこと。"""
-        coco_frame = request.getfixturevalue(fixture_name)
-        angles = calculate_joint_angles(coco_frame[np.newaxis, ...])
-
-        assert not np.isnan(angles).any(), f"{fixture_name} の計算結果に NaN が含まれています。"
-        assert not np.isinf(angles).any(), f"{fixture_name} の計算結果に Inf が含まれています。"
-        assert angles.shape == (1, len(JOINT_NAMES), 3)
-
-    def test_gimbal_lock_pitch_singularity_safety(self, tpose_coco):
-        """
-        腕を真上（ピッチ90度付近）に振り上げたような特異点・ジンバルロック姿勢でも、
-        オイラー角計算が破綻せず、有限な数値（finite）として安全に算出されること。
-        """
-        gimbal_coco = tpose_coco.copy()
-        # 左肩、肘、手首を垂直上向きに配置
-        left_shoulder = gimbal_coco[5]  # leftshoulder
-        gimbal_coco[7] = left_shoulder + np.array([0.0, 0.27, 0.0])  # leftelbow
-        gimbal_coco[9] = left_shoulder + np.array([0.0, 0.50, 0.0])  # leftwrist
-
-        # calculate_joint_angles を実行
-        angles = calculate_joint_angles(gimbal_coco[np.newaxis, ...])
-
-        # クラッシュせず、すべての角度が有限値であること
-        assert np.all(np.isfinite(angles)), "ジンバルロック姿勢において NaN または Inf が発生しました。"

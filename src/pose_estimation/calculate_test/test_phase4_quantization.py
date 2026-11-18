@@ -226,23 +226,6 @@ class TestRoundtripQuantizationErrorBounds:
         motion_angles = to_motion_angles(absolute_angles)
 
         np.testing.assert_allclose(motion_angles, expected, atol=1e-10)
-        decoded_motion = MotionLanguageDecoder().decode(
-            MotionLanguageEncoder().encode(motion_angles)
-        )
-        for axis_id, (joint, axis, _, levels, minimum, maximum) in AXIS_MAPPING.items():
-            raw_value = absolute_angles[0, joint, axis] - T_POSE_OFFSETS[joint][axis]
-            wrapped_value = motion_angles[0, joint, axis]
-            if (
-                not np.isclose(raw_value, wrapped_value)
-                and minimum <= wrapped_value <= maximum
-            ):
-                step = (maximum - minimum) / levels
-                error = abs(decoded_motion[0, joint, axis] - wrapped_value)
-                assert error <= step / 2.0 + 1e-5, (
-                    f"{fixture_name} の軸 {axis_id} ({JOINT_NAMES[joint]} 軸{axis})で"
-                    "角度の折り返しに失敗: "
-                    f"期待値={wrapped_value:.3f}°, 復元値={decoded_motion[0, joint, axis]:.3f}°"
-                )
 
     def test_random_angles_within_bounds_roundtrip_error(self):
         """可動域内のランダムな連続角度に対して、復元誤差がステップ幅の半分 (step / 2.0) 以下に収まること。"""

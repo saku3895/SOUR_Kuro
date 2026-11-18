@@ -199,56 +199,17 @@ class TestProcrustesAlignedMPJPE:
         Procrustes解析による PA-MPJPE が機械ゼロ（1e-12 以下）となり、
         姿勢形状が完全に維持されること。
         """
-        # 生の入力データ（カメラ座標系: カメラから離れた位置 + スケール変動）
-        camera_coco = make_tpose_coco(scale=1.75) + np.array([120.0, -50.0, 300.0])
-
-        # 処理パイプライン: 基準点算出 & 腰原点への相対化
-        raw_pts = _named_points(camera_coco)
-        normalized_15j = np.array([raw_pts[name] - raw_pts["hips"] for name in JOINT_NAMES])
-
-        # 基準となる理想姿勢（原点・標準スケール）
         ref_pts = _named_points(tpose_coco)
         reference_15j = np.array([ref_pts[name] - ref_pts["hips"] for name in JOINT_NAMES])
 
-        # プロクラステス解析でスケール・向き・位置のアライメント誤差を評価
-        error = pa_mpjpe(normalized_15j, reference_15j)
-        assert error < 1e-12, (
-            f"正規化パイプライン後の PA-MPJPE ({error:.2e}) が 0 になりませんでした。"
-        )
-
-    def test_scale_invariance_of_pa_mpjpe(self, tpose_coco):
-        """
-        人間の体格（骨の長さ）が 0.5 倍（小柄）または 2.0 倍（大柄）に
-        変動しても、プロクラステス解析によりスケール差が完全に除去され、
-        相対的なPA-MPJPEが完全に不変であること。
-        """
-        scales = [0.5, 0.75, 1.0, 1.5, 2.0]
-        # 腰原点化した15点
-        pts_base = _named_points(tpose_coco)
-        human_base_15j = np.array([pts_base[name] - pts_base["hips"] for name in JOINT_NAMES])
-
-        for s in scales:
-            scaled_coco = make_tpose_coco(scale=s)
-            pts_s = _named_points(scaled_coco)
-            human_s_15j = np.array([pts_s[name] - pts_s["hips"] for name in JOINT_NAMES])
-
-            # スケールが違っても、PA-MPJPE（同一形状）は機械ゼロ (1e-12 以下)
-            error_identity = pa_mpjpe(human_s_15j, human_base_15j)
-            assert error_identity < 1e-12, (
-                f"スケール {s} 倍の姿勢に対する PA-MPJPE ({error_identity:.2e}) が 0 になりませんでした。"
+        for scale in [0.5, 1.0, 1.75, 2.0]:
+            camera_coco = make_tpose_coco(scale=scale) + np.array([120.0, -50.0, 300.0])
+            raw_pts = _named_points(camera_coco)
+            normalized_15j = np.array([raw_pts[name] - raw_pts["hips"] for name in JOINT_NAMES])
+            error = pa_mpjpe(normalized_15j, reference_15j)
+            assert error < 1e-12, (
+                f"スケール {scale} 倍の正規化後 PA-MPJPE ({error:.2e}) が 0 になりませんでした。"
             )
-
-    def test_zero_length_vector_limb_raises_value_error(self, tpose_coco):
-        """
-        関節間（例: 肩と肘）の距離が0（ゼロ長ベクトル）の場合、
-        ゼロ除算を防ぐため ValueError が送出されること。
-        """
-        corrupted = tpose_coco.copy()
-        # 左肘を左肩と同一点にする（L_shoulder -> L_elbow のベクトル長 = 0）
-        corrupted[COCO_INDEX["leftelbow"]] = corrupted[COCO_INDEX["leftshoulder"]]
-
-        with pytest.raises(ValueError, match="zero-length vector"):
-            calculate_joint_angles(corrupted[np.newaxis, ...])
 
     def test_procrustes_alignment_mathematical_properties(self):
         """
@@ -277,7 +238,7 @@ class TestProcrustesAlignedMPJPE:
 class TestNormalizationEdgeCases:
     """異常な入力やゼロ長ベクトル等に対する堅牢性・エラーハンドリング検証。"""
 
-    def test_impossible_17_point_data_raises_value_error(self):
+    def test_zero_length_body_and_limb_vectors_raise_value_error(self, tpose_coco):
         """
         17点すべてが同一点にある、人間の姿勢として不可能な入力を拒否する。
 
@@ -285,34 +246,25 @@ class TestNormalizationEdgeCases:
         構築できず、zero-length vector エラーになる。
         """
         impossible_pose = np.full((1, 17, 3), 100.0, dtype=float)
+        body_zero = tpose_coco.copy()
+        body_zero[COCO_INDEX["leftshoulder"]] = body_zero[COCO_INDEX["lefthip"]]
+        body_zero[COCO_INDEX["rightshoulder"]] = body_zero[COCO_INDEX["righthip"]]
+        limb_zero = tpose_coco.copy()
+        limb_zero[COCO_INDEX["leftelbow"]] = limb_zero[COCO_INDEX["leftshoulder"]]
 
-        with pytest.raises(ValueError, match="zero-length vector for body"):
-            calculate_joint_angles(impossible_pose)
+        for corrupted, match in (
+            (impossible_pose, "zero-length vector for body"),
+            (body_zero[np.newaxis, ...], "zero-length vector"),
+            (limb_zero[np.newaxis, ...], "zero-length vector"),
+        ):
+            with pytest.raises(ValueError, match=match):
+                calculate_joint_angles(corrupted)
 
-    def test_zero_length_vector_body_raises_value_error(self, tpose_coco):
-        """
-        腰と首が完全一致している場合、
-        体幹の長手方向を構築できないため ValueError が送出されること。
-        """
+    @pytest.mark.parametrize("value", [np.nan, np.inf, -np.inf])
+    def test_non_finite_coordinates_raise_value_error(self, tpose_coco, value):
+        """座標に NaN または Inf が含まれる場合、ValueError が送出されること。"""
         corrupted = tpose_coco.copy()
-        corrupted[COCO_INDEX["leftshoulder"]] = corrupted[COCO_INDEX["lefthip"]]
-        corrupted[COCO_INDEX["rightshoulder"]] = corrupted[COCO_INDEX["righthip"]]
-
-        with pytest.raises(ValueError, match="zero-length vector"):
-            calculate_joint_angles(corrupted[np.newaxis, ...])
-
-    def test_nan_coordinates_raise_value_error(self, tpose_coco):
-        """座標に NaN が含まれる場合、明確な ValueError が送出されること。"""
-        corrupted = tpose_coco.copy()
-        corrupted[0, 0] = np.nan
-
-        with pytest.raises(ValueError, match="finite values"):
-            calculate_joint_angles(corrupted[np.newaxis, ...])
-
-    def test_inf_coordinates_raise_value_error(self, tpose_coco):
-        """座標に Inf が含まれる場合、明確な ValueError が送出されること。"""
-        corrupted = tpose_coco.copy()
-        corrupted[5, 1] = np.inf
+        corrupted[0, 0] = value
 
         with pytest.raises(ValueError, match="finite values"):
             calculate_joint_angles(corrupted[np.newaxis, ...])

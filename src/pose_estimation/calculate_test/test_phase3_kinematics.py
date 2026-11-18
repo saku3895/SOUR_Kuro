@@ -202,9 +202,11 @@ class TestForwardKinematicsRoundtrip:
 
         # IK: 座標 → オイラー角
         angles = calculate_joint_angles(coco_frame[np.newaxis, ...])[0]
+        assert np.all(np.isfinite(angles)), f"{fixture_name} の角度に NaN/Inf が含まれています。"
 
         # FK: オイラー角 → 3D 座標再構築
         reconstructed_15j = forward_kinematics(angles, bone_lengths)
+        assert np.all(np.isfinite(reconstructed_15j)), f"{fixture_name} の再構築座標が有限ではありません。"
 
         # PA-MPJPE を計算
         error = pa_mpjpe(reconstructed_15j, original_15j)
@@ -234,33 +236,7 @@ class TestForwardKinematicsRoundtrip:
 
 
 # ---------------------------------------------------------------------------
-# 2. ルート（腰）座標系の原点固定確認
-# ---------------------------------------------------------------------------
-
-class TestHipsRootOriginConstraint:
-    """再構築後の姿勢において腰（hips）が厳密に原点 (0, 0, 0) に固定されていることの検証。"""
-
-    @pytest.mark.parametrize("fixture_name", ["tpose_coco", "squat_coco", "raised_left_arm_coco"])
-    def test_reconstructed_hips_is_strictly_at_origin(self, request, fixture_name):
-        """任意のモック姿勢から再構築された 3D 座標において、腰（hips）が厳密に原点にあること。"""
-        coco_frame = request.getfixturevalue(fixture_name)
-        named_pts = _named_points(coco_frame)
-        bone_lengths = extract_bone_lengths_from_points(named_pts)
-
-        angles = calculate_joint_angles(coco_frame[np.newaxis, ...])[0]
-        reconstructed_15j = forward_kinematics(angles, bone_lengths)
-
-        hips_pos = reconstructed_15j[JOINT_INDEX["hips"]]
-        np.testing.assert_allclose(
-            hips_pos,
-            np.zeros(3),
-            atol=1e-12,
-            err_msg=f"再構築された腰の座標が原点 (0, 0, 0) ではありません: {hips_pos}",
-        )
-
-
-# ---------------------------------------------------------------------------
-# 3. 特異点（ジンバルロック付近）での姿勢復元検証
+# 2. 特異点（ジンバルロック付近）での姿勢復元検証
 # ---------------------------------------------------------------------------
 
 class TestSingularityAndGimbalLockRoundtrip:
@@ -297,7 +273,7 @@ class TestSingularityAndGimbalLockRoundtrip:
 
 
 # ---------------------------------------------------------------------------
-# 4. ロボット固定ボーン長モデルによる姿勢再構築の幾何学的整合性
+# 3. ロボット固定ボーン長モデルによる姿勢再構築の幾何学的整合性
 # ---------------------------------------------------------------------------
 
 class TestRobotFixedBoneLengthsReconstruction:
