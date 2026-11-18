@@ -24,7 +24,8 @@ def to_motion_angles(absolute_angles: np.ndarray) -> np.ndarray:
         raise ValueError("absolute_angles must have shape (frames, 15, 3)")
     if not np.all(np.isfinite(values)):
         raise ValueError("absolute_angles must contain finite values")
-    return values - offsets[np.newaxis, ...]
+    motion_angles = values - offsets[np.newaxis, ...]
+    return (motion_angles + 180.0) % 360.0 - 180.0
 
 
 def from_motion_angles(motion_angles: np.ndarray) -> np.ndarray:

@@ -18,10 +18,10 @@ _SRC_DIR = Path(__file__).resolve().parents[2]  # …/src/
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
-from pose_estimation.keypoint_json import load_keypoints_json
+from gui.keypoint_json import load_keypoints_json
 
 
-_POSTURE_DIR = Path(__file__).resolve().parents[3] / "data_logs" / "posture"
+_POSTURE_DIR = Path(__file__).resolve().parents[3] / "data" / "posture"
 
 
 # ---------------------------------------------------------------------------

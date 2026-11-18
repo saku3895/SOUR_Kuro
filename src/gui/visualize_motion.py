@@ -10,15 +10,17 @@ from matplotlib.animation import FuncAnimation
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-try:
-    from .motion_config import JOINT_INDEX, JOINT_NAMES, PARENTS
-    from .motion_language import MotionLanguageDecoder
-except ImportError:
-    from motion_config import JOINT_INDEX, JOINT_NAMES, PARENTS
-    from motion_language import MotionLanguageDecoder
+from pose_estimation.motion_config import (
+        JOINT_ANGLE_SIGNS,
+        JOINT_INDEX,
+        JOINT_NAMES,
+        PARENTS,
+        T_POSE_OFFSETS,
+    )
+from pose_estimation.motion_language import MotionLanguageDecoder
 
 
-DEFAULT_INPUT = Path(__file__).resolve().parents[2] / "data_logs" / "motion_language" / "motion_language.txt"
+DEFAULT_INPUT = Path(__file__).resolve().parents[2] / "data" / "motion_language" / "motion_language.txt"
 DEFAULT_FPS = 30
 AXIS_LIMITS = (-1.0, 1.0)
 
@@ -44,9 +46,14 @@ BONE_VECTORS = {
 CAMERA_NEUTRAL_ROTATION = np.diag([1.0, -1.0, -1.0])
 
 
-def _rotation_matrix(angles: np.ndarray) -> np.ndarray:
+def _rotation_matrix(angles: np.ndarray, joint_name: str | None = None) -> np.ndarray:
     """Return the SciPy ``zxy`` rotation for [roll, pitch, yaw] degrees."""
-    return Rotation.from_euler("zxy", angles, degrees=True).as_matrix()
+    physical_angles = np.asarray(angles, dtype=float).copy()
+    if joint_name in JOINT_ANGLE_SIGNS:
+        offsets = np.asarray(T_POSE_OFFSETS[JOINT_INDEX[joint_name]], dtype=float)
+        relative = (physical_angles - offsets + 180.0) % 360.0 - 180.0
+        physical_angles = relative * JOINT_ANGLE_SIGNS[joint_name] + offsets
+    return Rotation.from_euler("zxy", physical_angles, degrees=True).as_matrix()
 
 
 def _reconstruct_frame(frame_angles: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -67,7 +74,7 @@ def _reconstruct_frame(frame_angles: np.ndarray) -> tuple[np.ndarray, np.ndarray
         parent_rotation = global_rotations[parent_index]
         positions[child_index] = positions[parent_index] + parent_rotation @ bone
         global_rotations[child_index] = (
-            parent_rotation @ _rotation_matrix(frame_angles[child_index])
+            parent_rotation @ _rotation_matrix(frame_angles[child_index], child_name)
         )
     return positions, global_rotations
 

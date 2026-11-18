@@ -1,324 +1,336 @@
 #!/usr/bin/env python3
 
-import cv2
-import depthai as dai
-import numpy as np
-import time
+from __future__ import annotations
+
 import argparse
+import json
+import sys
+import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-try:
-    from .calculate_joint_angles import calculate_joint_angles
-    from .motion_trigger import MotionTriggerEngine
-    from .motion_language import MotionLanguageEncoder, to_motion_angles
-    from .motion_log import save_motion_log
-except ImportError:
-    from calculate_joint_angles import calculate_joint_angles
-    from motion_trigger import MotionTriggerEngine
-    from motion_language import MotionLanguageEncoder, to_motion_angles
-    from motion_log import save_motion_log
+import cv2
+import depthai as dai
+import numpy as np
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QCloseEvent, QImage, QPixmap
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
 
 NUM_JOINTS = 17
-
+FPS = 60
+MODEL_NAME = "luxonis/yolo26-nano-pose-estimation:coco-512x288"
 YOLO26_EDGES = [
     (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 6), (5, 6),
     (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12), (11, 12),
-    (11, 13), (13, 15), (12, 14), (14, 16)
+    (11, 13), (13, 15), (12, 14), (14, 16),
 ]
+KEYPOINT_NAMES = (
+    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+    "left_wrist", "right_wrist", "left_hip", "right_hip",
+    "left_knee", "right_knee", "left_ankle", "right_ankle",
+)
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--depthSource", type=str, default="stereo", choices=["stereo", "neural"])
-args = parser.parse_args()
-
-device = dai.Device()
-fps = 60
-
-MODEL_NAME = "luxonis/yolo26-nano-pose-estimation:coco-512x288"
 
 class JointFilter:
-    def __init__(self, window_size=3):
-        self.window_size = window_size
-        self.history = {i: deque(maxlen=window_size) for i in range(NUM_JOINTS)}
-        self.last_valid = {i: (0.0, 0.0, 0.0) for i in range(NUM_JOINTS)}
+    def __init__(self, window_size: int = 3) -> None:
+        self.history = {index: deque(maxlen=window_size) for index in range(NUM_JOINTS)}
+        self.last_valid = {index: (0.0, 0.0, 0.0) for index in range(NUM_JOINTS)}
 
-    def update(self, joint_id, x, y, z):
-        if joint_id >= NUM_JOINTS: return x, y, z
+    def update(self, joint_id: int, x: float, y: float, z: float) -> tuple[float, float, float]:
         if z <= 0:
-            if self.last_valid[joint_id][2] > 0: x, y, z = self.last_valid[joint_id]
-            else: return x, y, z
+            previous = self.last_valid[joint_id]
+            if previous[2] > 0:
+                x, y, z = previous
+            else:
+                return x, y, z
         self.history[joint_id].append((x, y, z))
         self.last_valid[joint_id] = (x, y, z)
-        arr = np.array(self.history[joint_id])
-        return np.mean(arr[:, 0]), np.mean(arr[:, 1]), np.mean(arr[:, 2])
-
-joint_filter = JointFilter(window_size=3)
-
-# ⚡ モジュールの初期化（コントローラー管理下）
-motion_trigger = MotionTriggerEngine(
-    threshold_energy=4.0,
-    release_threshold=2.0,
-    min_trigger_frames=6,
-    stability_frames=8,
-)
-motion_encoder = MotionLanguageEncoder()
-
-SIGNAL_WINDOW_SIZE = 60
-angle_energy_history = deque([0.0] * SIGNAL_WINDOW_SIZE, maxlen=SIGNAL_WINDOW_SIZE)
-energy_measurement_frame = 0
-video_writer = None
-video_output_path = None
+        values = np.asarray(self.history[joint_id])
+        return tuple(np.mean(values, axis=0).tolist())
 
 
-def save_motion_sequence(angle_sequence):
-    if angle_sequence is None or len(angle_sequence) == 0:
-        return None
-
-    motion_language = motion_encoder.encode_sequence(to_motion_angles(angle_sequence))
-    motion_log_path = save_motion_log(
-        motion_language,
-        Path(__file__).resolve().parents[2] / "data_logs" / "motion",
-    )
-    print(
-        "\n=== 人間動作言語 ===\n"
-        f"フレーム数: {angle_sequence.shape[0]}\n"
-        f"保存先: {motion_log_path}\n"
-        f"{motion_language}\n"
-        "==================\n"
-    )
-    return motion_log_path
+def frame_norm(frame: np.ndarray, bbox: tuple[float, float, float, float]) -> tuple[int, int, int, int]:
+    norm_values = np.full(len(bbox), frame.shape[0])
+    norm_values[::2] = frame.shape[1]
+    return tuple((np.clip(np.asarray(bbox), 0, 1) * norm_values).astype(int).tolist())
 
 
-with dai.Pipeline(device) as pipeline:
-    cameraNode = pipeline.create(dai.node.Camera).build(sensorFps=fps)
-    monoLeft = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_B, sensorFps=fps)
-    monoRight = pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_C, sensorFps=fps)
-    monoLeftOut = monoLeft.requestOutput((640, 400), fps=fps)
-    monoRightOut = monoRight.requestOutput((640, 400), fps=fps)
+class PoseCaptureWindow(QMainWindow):
+    def __init__(self, depth_source: str) -> None:
+        super().__init__()
+        self.setWindowTitle("姿勢座標取得")
+        self.resize(1280, 600)
 
-    requiredCamCapabilities = dai.ImgFrameCapability()
-    requiredCamCapabilities.fps.fixed(fps)
-    requiredCamCapabilities.enableUndistortion = True
-    
-    detectionNetwork = pipeline.create(dai.node.DetectionNetwork).build(cameraNode, MODEL_NAME, requiredCamCapabilities)
-    spatialCalculator = pipeline.create(dai.node.SpatialLocationCalculator)
-    spatialCalculator.initialConfig.setCalculateSpatialKeypoints(True)
-    detectionNetwork.out.link(spatialCalculator.inputDetections)
+        self.device = dai.Device()
+        self.pipeline = self._build_pipeline(depth_source)
+        self.rgb_queue = self.detection_network.passthrough.createOutputQueue(
+            maxSize=4, blocking=False
+        )
+        self.detection_queue = self.spatial_calculator.outputDetections.createOutputQueue(
+            maxSize=4, blocking=False
+        )
+        self.pipeline.start()
 
-    if args.depthSource == "stereo":
-        depth = pipeline.create(dai.node.StereoDepth).build(monoLeftOut, monoRightOut, presetMode=dai.node.StereoDepth.PresetMode.FAST_ACCURACY)
-        if device.getPlatform() == dai.Platform.RVC2:
-            detectionNetwork.passthrough.link(depth.inputAlignTo)
-            depth.depth.link(spatialCalculator.inputDepth)
-    elif args.depthSource == "neural":
-        depth = pipeline.create(dai.node.NeuralDepth).build(monoLeftOut, monoRightOut, dai.DeviceModelZoo.NEURAL_DEPTH_MEDIUM)
+        self.joint_filter = JointFilter()
+        self.latest_coordinates: np.ndarray | None = None
+        self.frame_id = 0
+        self.last_frame_time = time.monotonic()
+        self.fps_history: deque[float] = deque(maxlen=10)
+        self.latest_detections = []
 
-    if device.getPlatform() == dai.Platform.RVC4:
-        align = pipeline.create(dai.node.ImageAlign)
-        depth.depth.link(align.input)
-        detectionNetwork.passthrough.link(align.inputAlignTo)
-        align.outputAligned.link(spatialCalculator.inputDepth)
+        # 録画状態の管理
+        self.is_recording = False
+        self.recorded_coordinates: list[np.ndarray] = []
+        self.video_writer: cv2.VideoWriter | None = None
+        self.video_output_path: Path | None = None
+        self.motion_output_path: Path | None = None
 
-    qRgb = detectionNetwork.passthrough.createOutputQueue(maxSize=4, blocking=False)
-    qDet = spatialCalculator.outputDetections.createOutputQueue(maxSize=4, blocking=False)
+        self._init_ui()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(1)
 
-    pipeline.start()
-    
-    last_frame_time = time.monotonic()
-    fps_display = 0.0
-    fps_smoothing_queue = deque(maxlen=10)
+    def _build_pipeline(self, depth_source: str) -> dai.Pipeline:
+        pipeline = dai.Pipeline(self.device)
+        camera = pipeline.create(dai.node.Camera).build(sensorFps=FPS)
+        mono_left = pipeline.create(dai.node.Camera).build(
+            dai.CameraBoardSocket.CAM_B, sensorFps=FPS
+        )
+        mono_right = pipeline.create(dai.node.Camera).build(
+            dai.CameraBoardSocket.CAM_C, sensorFps=FPS
+        )
+        mono_left_output = mono_left.requestOutput((640, 400), fps=FPS)
+        mono_right_output = mono_right.requestOutput((640, 400), fps=FPS)
 
-    frame = None
-    detections = []
+        capabilities = dai.ImgFrameCapability()
+        capabilities.fps.fixed(FPS)
+        capabilities.enableUndistortion = True
+        self.detection_network = pipeline.create(dai.node.DetectionNetwork).build(
+            camera, MODEL_NAME, capabilities
+        )
+        self.spatial_calculator = pipeline.create(dai.node.SpatialLocationCalculator)
+        self.spatial_calculator.initialConfig.setCalculateSpatialKeypoints(True)
+        self.detection_network.out.link(self.spatial_calculator.inputDetections)
 
-    def frameNorm(frame, bbox):
-        normVals = np.full(len(bbox), frame.shape[0])
-        normVals[::2] = frame.shape[1]
-        return (np.clip(np.array(bbox), 0, 1) * normVals).astype(int)
-
-    def process_and_display(frame, detections):
-        global last_frame_time, fps_display, energy_measurement_frame
-        global video_writer, video_output_path
-
-        current_time = time.monotonic()
-        frame_interval = current_time - last_frame_time
-        last_frame_time = current_time
-        
-        instant_fps = 1.0 / frame_interval if frame_interval > 0 else 0.0
-        fps_smoothing_queue.append(instant_fps)
-        fps_display = np.mean(fps_smoothing_queue)
-
-        frame_black_skeleton = np.zeros_like(frame)
-        frame_preview = frame.copy()
-        current_frame_data = np.zeros((NUM_JOINTS, 3), dtype=np.float32)
-        
-        main_detection = None
-        min_depth = float('inf')
-        
-        for detection in detections:
-            det_depth = detection.spatialCoordinates.z / 1000.0
-            if 0 < det_depth < min_depth:
-                min_depth = det_depth
-                main_detection = detection
-
-        if main_detection is not None:
-            detection = main_detection
-            bbox = frameNorm(frame, (detection.xmin, detection.ymin, detection.xmax, detection.ymax))
-            cv2.rectangle(frame_black_skeleton, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
-            cv2.rectangle(frame_preview, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
-
-            keypoints = detection.getKeypoints()
-            if len(keypoints) != 0:
-                person_depth_m = min_depth
-
-                smooth_joints = {}
-                for j, keypoint in enumerate(keypoints):
-                    if j >= NUM_JOINTS: break
-                    kp_score = getattr(keypoint, 'score', getattr(keypoint, 'confidence', 1.0))
-                    
-                    if kp_score < 0.4:
-                        smooth_joints[j] = (0.0, 0.0, 0.0)
-                        continue
-
-                    raw_x = keypoint.spatialCoordinates.x / 1000.0
-                    raw_y = keypoint.spatialCoordinates.y / 1000.0
-                    raw_z = keypoint.spatialCoordinates.z / 1000.0
-                    if raw_z <= 0 and person_depth_m > 0: raw_z = person_depth_m
-
-                    sm_x, sm_y, sm_z = joint_filter.update(j, raw_x, raw_y, raw_z)
-                    smooth_joints[j] = (sm_x, sm_y, sm_z)
-
-                base_x, base_y, base_z = 0.0, 0.0, 0.0
-                if 11 in smooth_joints and 12 in smooth_joints:
-                    if smooth_joints[11][2] > 0 and smooth_joints[12][2] > 0:
-                        base_x = (smooth_joints[11][0] + smooth_joints[12][0]) / 2.0
-                        base_y = (smooth_joints[11][1] + smooth_joints[12][1]) / 2.0
-                        base_z = (smooth_joints[11][2] + smooth_joints[12][2]) / 2.0
-
-                for j, keypoint in enumerate(keypoints):
-                    if j >= NUM_JOINTS: break
-                    keypoint_pos = frameNorm(frame, (keypoint.imageCoordinates.x, keypoint.imageCoordinates.y))
-                    if j not in smooth_joints: continue
-                    sm_x, sm_y, sm_z = smooth_joints[j]
-
-                    if base_z > 0 and sm_z > 0:
-                        norm_x = sm_x - base_x
-                        norm_y = sm_y - base_y
-                        norm_z = sm_z - base_z
-                        current_frame_data[j] = [norm_x, norm_y, norm_z]
-                    else:
-                        current_frame_data[j] = [0.0, 0.0, 0.0]
-
-                    cv2.circle(frame_black_skeleton, (keypoint_pos[0], keypoint_pos[1]), 3, (0, 255, 0), -1)
-                    cv2.circle(frame_preview, (keypoint_pos[0], keypoint_pos[1]), 3, (0, 255, 0), -1)
-
-                for edge in YOLO26_EDGES:
-                    if edge[0] < len(keypoints) and edge[1] < len(keypoints):
-                        kp1_pos = frameNorm(frame, (keypoints[edge[0]].imageCoordinates.x, keypoints[edge[0]].imageCoordinates.y))
-                        kp2_pos = frameNorm(frame, (keypoints[edge[1]].imageCoordinates.x, keypoints[edge[1]].imageCoordinates.y))
-                        cv2.line(frame_black_skeleton, (kp1_pos[0], kp1_pos[1]), (kp2_pos[0], kp2_pos[1]), (0, 255, 0), 2)
-                        cv2.line(frame_preview, (kp1_pos[0], kp1_pos[1]), (kp2_pos[0], kp2_pos[1]), (0, 255, 0), 2)
-
-        angle_energy = 0.0
-        extracted_angle_sequence = None
-        try:
-            angle_frame = calculate_joint_angles(
-                current_frame_data[np.newaxis, ...]
-            )[0]
-            angle_energy, extracted_angle_sequence = motion_trigger.process_frame(
-                angle_frame
+        if depth_source == "stereo":
+            depth = pipeline.create(dai.node.StereoDepth).build(
+                mono_left_output,
+                mono_right_output,
+                presetMode=dai.node.StereoDepth.PresetMode.FAST_ACCURACY,
             )
-            energy_measurement_frame += 1
-            if energy_measurement_frame % 10 == 0:
-                state = "TRACKING" if motion_trigger.current_state == 1 else "IDLE"
-                print(
-                    f"[ANGLE ENERGY] frame={energy_measurement_frame} "
-                    f"raw={motion_trigger.last_raw_energy:.3f} "
-                    f"smoothed={motion_trigger.last_smoothed_energy:.3f} "
-                    f"state={state}"
-                )
-        except (TypeError, ValueError):
-            # 見切れや欠損で姿勢を構成できないフレームは状態を変更しない。
-            pass
-
-        if extracted_angle_sequence is not None:
-            save_motion_sequence(extracted_angle_sequence)
-
-        angle_energy_history.append(angle_energy)
-
-        # 画面描画
-        graph_w, graph_h = 512, 200
-        graph_img = np.zeros((graph_h, graph_w, 3), dtype=np.uint8) + 15
-        
-        state_str = "TRACKING (RECORDING)" if motion_trigger.current_state == 1 else "IDLE (WAITING)"
-        state_color = (0, 0, 255) if motion_trigger.current_state == 1 else (0, 255, 0)
-        cv2.putText(graph_img, f"STATUS: {state_str}", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, state_color, 2)
-
-        step_x = graph_w / SIGNAL_WINDOW_SIZE
-        for i in range(1, len(angle_energy_history)):
-            x1 = int((i - 1) * step_x)
-            x2 = int(i * step_x)
-            
-            energy_y1 = int((graph_h - 20) - (angle_energy_history[i-1] * 20))
-            energy_y2 = int((graph_h - 20) - (angle_energy_history[i] * 20))
-            energy_y1, energy_y2 = np.clip(
-                [energy_y1, energy_y2], 70, graph_h - 5
+            if self.device.getPlatform() == dai.Platform.RVC2:
+                self.detection_network.passthrough.link(depth.inputAlignTo)
+                depth.depth.link(self.spatial_calculator.inputDepth)
+        else:
+            depth = pipeline.create(dai.node.NeuralDepth).build(
+                mono_left_output,
+                mono_right_output,
+                dai.DeviceModelZoo.NEURAL_DEPTH_MEDIUM,
             )
 
-            cv2.line(
-                graph_img,
-                (x1, energy_y1),
-                (x2, energy_y2),
-                (0, 255, 255),
-                2,
-            )
+        if self.device.getPlatform() == dai.Platform.RVC4:
+            align = pipeline.create(dai.node.ImageAlign)
+            depth.depth.link(align.input)
+            self.detection_network.passthrough.link(align.inputAlignTo)
+            align.outputAligned.link(self.spatial_calculator.inputDepth)
+        return pipeline
 
-        cv2.putText(frame_black_skeleton, f"FPS: {fps_display:.1f}", (frame.shape[1] - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-        cv2.putText(frame_preview, f"FPS: {fps_display:.1f}", (frame.shape[1] - 100, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+    def _init_ui(self) -> None:
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+        image_layout = QHBoxLayout()
+        self.raw_view = QLabel("カメラ映像")
+        self.skeleton_view = QLabel("骨格映像")
+        for view in (self.raw_view, self.skeleton_view):
+            view.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            view.setMinimumSize(480, 360)
+            view.setStyleSheet("background-color: black;")
+            image_layout.addWidget(view)
+        layout.addLayout(image_layout)
 
-        if video_writer is None:
-            output_dir = Path(__file__).resolve().parents[2] / "data_logs" / "videos"
-            output_dir.mkdir(parents=True, exist_ok=True)
+        controls = QHBoxLayout()
+        self.record_button = QPushButton("● 録画開始")
+        self.record_button.setStyleSheet("font-weight: bold; padding: 6px 12px;")
+        self.record_button.clicked.connect(self.toggle_recording)
+        quit_button = QPushButton("終了")
+        quit_button.clicked.connect(self.close)
+        self.status_label = QLabel("姿勢を検出しています")
+        controls.addWidget(self.record_button)
+        controls.addWidget(quit_button)
+        controls.addWidget(self.status_label, stretch=1)
+        layout.addLayout(controls)
+
+    def update_frame(self) -> None:
+        rgb_packet = self.rgb_queue.tryGet()
+        detection_packet = self.detection_queue.tryGet()
+        if detection_packet is not None:
+            self.latest_detections = detection_packet.detections
+        if rgb_packet is None:
+            return
+
+        frame = rgb_packet.getCvFrame()
+        skeleton, coordinates = self._make_skeleton_frame(frame, self.latest_detections)
+        self.latest_coordinates = coordinates
+        self.frame_id += 1
+
+        # 録画中のデータ蓄積
+        if self.is_recording:
+            # 17点座標の記録 (未検出フレームは直前の姿勢またはゼロで埋めてフレーム整合性を維持)
+            if coordinates is not None:
+                coord_frame = coordinates.copy()
+            elif self.recorded_coordinates:
+                coord_frame = self.recorded_coordinates[-1].copy()
+            else:
+                coord_frame = np.zeros((NUM_JOINTS, 3), dtype=np.float32)
+            self.recorded_coordinates.append(coord_frame)
+
+            # 横並び動画フレームの書き出し (生映像 + 黒背景骨格映像)
+            side_by_side = np.hstack((frame, skeleton))
+            if self.video_writer is not None:
+                self.video_writer.write(side_by_side)
+
+        now = time.monotonic()
+        interval = now - self.last_frame_time
+        self.last_frame_time = now
+        if interval > 0:
+            self.fps_history.append(1.0 / interval)
+
+        state = "検出中" if coordinates is not None else "姿勢未検出"
+        fps = np.mean(self.fps_history) if self.fps_history else 0.0
+        rec_status = f" [● REC: {len(self.recorded_coordinates)} frames]" if self.is_recording else ""
+        self.status_label.setText(f"{state}  FPS: {fps:.1f}  frame: {self.frame_id}{rec_status}")
+        self._set_image(self.raw_view, frame)
+        self._set_image(self.skeleton_view, skeleton)
+
+    def _make_skeleton_frame(
+        self, frame: np.ndarray, detections: list
+    ) -> tuple[np.ndarray, np.ndarray | None]:
+        skeleton = np.zeros_like(frame)
+        main_detection = self._nearest_detection(detections)
+        if main_detection is None:
+            return skeleton, None
+
+        keypoints = main_detection.getKeypoints()
+        if len(keypoints) < NUM_JOINTS:
+            return skeleton, None
+        image_points = [
+            frame_norm(frame, (point.imageCoordinates.x, point.imageCoordinates.y))
+            for point in keypoints[:NUM_JOINTS]
+        ]
+        person_depth = main_detection.spatialCoordinates.z / 1000.0
+        smooth_joints: dict[int, tuple[float, float, float]] = {}
+        for index, keypoint in enumerate(keypoints[:NUM_JOINTS]):
+            score = getattr(keypoint, "score", getattr(keypoint, "confidence", 1.0))
+            if score < 0.4:
+                continue
+            x = keypoint.spatialCoordinates.x / 1000.0
+            y = keypoint.spatialCoordinates.y / 1000.0
+            z = keypoint.spatialCoordinates.z / 1000.0
+            if z <= 0 and person_depth > 0:
+                z = person_depth
+            smooth_joints[index] = self.joint_filter.update(index, x, y, z)
+
+        if 11 not in smooth_joints or 12 not in smooth_joints:
+            return skeleton, None
+        base = (np.asarray(smooth_joints[11]) + np.asarray(smooth_joints[12])) / 2.0
+        coordinates = np.zeros((NUM_JOINTS, 3), dtype=np.float32)
+        for index in range(NUM_JOINTS):
+            if index not in smooth_joints or smooth_joints[index][2] <= 0:
+                return skeleton, None
+            coordinates[index] = np.asarray(smooth_joints[index]) - base
+
+        for point in image_points:
+            cv2.circle(skeleton, point[:2], 3, (0, 255, 0), -1)
+        for start, end in YOLO26_EDGES:
+            cv2.line(skeleton, image_points[start][:2], image_points[end][:2], (0, 255, 0), 2)
+        return skeleton, coordinates
+
+    @staticmethod
+    def _nearest_detection(detections: list):
+        valid = [
+            detection for detection in detections
+            if detection.spatialCoordinates.z > 0
+        ]
+        return min(valid, key=lambda detection: detection.spatialCoordinates.z, default=None)
+
+    @staticmethod
+    def _set_image(label: QLabel, frame: np.ndarray) -> None:
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        height, width, channels = rgb.shape
+        image = QImage(rgb.data, width, height, channels * width, QImage.Format.Format_RGB888)
+        pixmap = QPixmap.fromImage(image)
+        label.setPixmap(pixmap.scaled(label.size(), Qt.AspectRatioMode.KeepAspectRatio))
+
+    def toggle_recording(self) -> None:
+        """録画の開始 / 停止を切り替える"""
+        if not self.is_recording:
+            # 録画開始
+            self.is_recording = True
+            self.recorded_coordinates = []
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            video_output_path = output_dir / f"skeleton_{timestamp}.mp4"
+            data_dir = Path(__file__).resolve().parents[2] / "data"
+
+            # 動画ライター準備 (幅2倍: 生映像 + 骨格映像)
+            video_dir = data_dir / "videos"
+            video_dir.mkdir(parents=True, exist_ok=True)
+            self.video_output_path = video_dir / f"video_{timestamp}.mp4"
+            self.motion_output_path = data_dir / "motion_position" / f"motion_{timestamp}.npy"
+            self.motion_output_path.parent.mkdir(parents=True, exist_ok=True)
+
             fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            video_writer = cv2.VideoWriter(
-                str(video_output_path),
+            # 640x400 のフレームが横に2枚並ぶため 1280x400
+            self.video_writer = cv2.VideoWriter(
+                str(self.video_output_path),
                 fourcc,
-                fps,
-                (frame_black_skeleton.shape[1], frame_black_skeleton.shape[0]),
+                FPS,
+                (640 * 2, 400),
             )
-            if not video_writer.isOpened():
-                video_writer.release()
-                video_writer = None
-                raise RuntimeError(f"動画ファイルを開けません: {video_output_path}")
 
-        video_writer.write(frame_black_skeleton)
-        
-        cv2.imshow("Skeleton Detection", frame_preview)
-        cv2.imshow("Skeleton Recording", frame_black_skeleton)
-        cv2.imshow("Motion Trigger Monitor", graph_img)
+            self.record_button.setText("■ 録画停止")
+            self.record_button.setStyleSheet("background-color: #d93025; color: white; font-weight: bold; padding: 6px 12px;")
+            self.status_label.setText(f"録画を開始しました: {self.video_output_path.name}")
+        else:
+            # 録画停止
+            self.is_recording = False
+            if self.video_writer is not None:
+                self.video_writer.release()
+                self.video_writer = None
 
-    try:
-        while pipeline.isRunning():
-            inRgb = qRgb.tryGet()
-            inDet = qDet.tryGet()
+            num_frames = len(self.recorded_coordinates)
+            if num_frames > 0 and self.motion_output_path is not None:
+                # (Frames, 17, 3) の NumPy 配列として保存
+                motion_array = np.asarray(self.recorded_coordinates, dtype=np.float32)
+                np.save(self.motion_output_path, motion_array)
+                msg = f"保存完了: {self.motion_output_path.name} ({num_frames} frames), {self.video_output_path.name}"
+            else:
+                msg = "録画フレームがありませんでした"
 
-            if inRgb is not None: frame = inRgb.getCvFrame()
-            if inDet is not None: detections = inDet.detections
-            
-            if frame is not None:
-                process_and_display(frame, detections)
-                frame = None
-            
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord("q"):
-                pipeline.stop()
-                break
-    finally:
-        if motion_trigger.current_state == motion_trigger.TRACKING:
-            save_motion_sequence(np.asarray(motion_trigger.gesture_buffer, dtype=float))
-        if video_writer is not None:
-            video_writer.release()
-            print(f"骨格動画を保存しました: {video_output_path}")
+            self.record_button.setText("● 録画開始")
+            self.record_button.setStyleSheet("font-weight: bold; padding: 6px 12px;")
+            self.status_label.setText(msg)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self.is_recording:
+            self.toggle_recording()
+        self.timer.stop()
+        if self.pipeline.isRunning():
+            self.pipeline.stop()
+        self.device.close()
+        event.accept()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="姿勢座標取得ウィンドウ")
+    parser.add_argument("--depthSource", choices=("stereo", "neural"), default="stereo")
+    args = parser.parse_args()
+    app = QApplication(sys.argv)
+    window = PoseCaptureWindow(args.depthSource)
+    window.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

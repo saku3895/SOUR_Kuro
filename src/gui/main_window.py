@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -34,11 +35,14 @@ from PyQt6.QtWidgets import (
 from pose_estimation import motion_config as m_config
 from pose_estimation import motion_language as m_lang
 from pose_estimation import calculate_joint_angles as calc_angles
-from pose_estimation.keypoint_json import load_keypoints_json
-from pose_estimation import visualize_motion as vis_motion
+from gui.keypoint_json import load_keypoints_json
+from gui import visualize_motion as vis_motion
 
 
-DEFAULT_POSE_PATH = Path(__file__).resolve().parents[2] / "data_logs" / "posture" / "t_pose.json"
+DEFAULT_POSE_PATH = Path(__file__).resolve().parents[2] / "data" / "posture" / "t_pose.json"
+INITIAL_CAMERA_POSITION = (0.0, 0.0, -7.0)
+INITIAL_CAMERA_FOCAL_POINT = (0.0, 0.0, 0.0)
+INITIAL_CAMERA_UP = (0.0, -1.0, 0.0)
 
 
 class MotionTestSystem(QMainWindow):
@@ -59,6 +63,17 @@ class MotionTestSystem(QMainWindow):
         self.sequence_keypoints: np.ndarray | None = None
         self.input_mode = "angles"
         self.current_frame_idx = 0
+        self.selected_joint_index = 0
+
+        # 手動姿勢変更の履歴管理（Undo / Redo）
+        self.history_stack: list[np.ndarray] = []
+        self.redo_stack: list[np.ndarray] = []
+        self._is_history_action = False
+        self._pre_edit_angles: np.ndarray | None = None
+        self._edit_debounce_timer = QTimer(self)
+        self._edit_debounce_timer.setSingleShot(True)
+        self._edit_debounce_timer.setInterval(400)  # 400ms操作が途切れたら1つの姿勢変更として確定
+        self._edit_debounce_timer.timeout.connect(self._commit_history_snapshot)
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.next_frame)
@@ -88,28 +103,20 @@ class MotionTestSystem(QMainWindow):
         control_layout = QVBoxLayout()
         control_layout.setContentsMargins(10, 10, 10, 10)
 
-        # 1. 動作言語ファイル読み込み
-        file_group = QGroupBox("1. 動作言語ファイル")
+        # 動作座標ファイル読み込み
+        file_group = QGroupBox("動作座標ファイル")
         file_layout = QVBoxLayout()
-        file_button = QPushButton("txtファイルを選択")
-        file_button.clicked.connect(self.load_motion_file)
+        load_button = QPushButton("17点座標ファイル (.npy / .json) を選択")
+        load_button.clicked.connect(self.load_coordinate_file)
         self.file_label = QLabel("未選択")
         self.file_label.setWordWrap(True)
-        file_layout.addWidget(file_button)
+        file_layout.addWidget(load_button)
         file_layout.addWidget(self.file_label)
         file_group.setLayout(file_layout)
         control_layout.addWidget(file_group)
 
-        keypoint_group = QGroupBox("座標JSONファイル")
-        keypoint_layout = QVBoxLayout()
-        keypoint_button = QPushButton("17点座標JSONを選択")
-        keypoint_button.clicked.connect(self.load_keypoint_file)
-        keypoint_layout.addWidget(keypoint_button)
-        keypoint_group.setLayout(keypoint_layout)
-        control_layout.addWidget(keypoint_group)
-
-        # 2. 連続再生・ステップ確認
-        play_group = QGroupBox("2. 連続再生・ステップ確認")
+        # 連続再生・ステップ確認
+        play_group = QGroupBox("連続再生・ステップ確認")
         play_layout = QVBoxLayout()
         self.frame_label = QLabel("Frame: 0 / 0")
         self.timeline_slider = QSlider(Qt.Orientation.Horizontal)
@@ -119,15 +126,23 @@ class MotionTestSystem(QMainWindow):
         play_layout.addWidget(self.timeline_slider)
         
         button_layout = QHBoxLayout()
+        undo_button = QPushButton("↶ 元に戻す")
+        undo_button.setToolTip("1つ前の姿勢状態に戻る")
+        undo_button.clicked.connect(self.undo_state)
         previous_button = QPushButton("◀ コマ戻し")
         previous_button.clicked.connect(self.prev_frame)
         self.play_button = QPushButton("▶ 再生")
         self.play_button.clicked.connect(self.toggle_playback)
         next_button = QPushButton("コマ送り ▶")
         next_button.clicked.connect(self.next_frame)
+        redo_button = QPushButton("進む ↷")
+        redo_button.setToolTip("戻した姿勢状態を進める")
+        redo_button.clicked.connect(self.redo_state)
+        button_layout.addWidget(undo_button)
         button_layout.addWidget(previous_button)
         button_layout.addWidget(self.play_button)
         button_layout.addWidget(next_button)
+        button_layout.addWidget(redo_button)
         play_layout.addLayout(button_layout)
 
         speed_layout = QHBoxLayout()
@@ -149,18 +164,22 @@ class MotionTestSystem(QMainWindow):
         play_group.setLayout(play_layout)
         control_layout.addWidget(play_group)
 
-        # 3. 関節角度指定 ➔ 動作言語エンコード
-        angle_group = QGroupBox("3. 関節角度から動作言語へエンコード")
+        # 関節角度から動作言語へエンコード
+        self.angle_group = QGroupBox("関節角度から動作言語へエンコード")
         angle_layout = QVBoxLayout()
         
-        self.joint_combo = QComboBox()
-        self.joint_combo.addItems(m_config.JOINT_NAMES)  # 15関節を選択
-        self.joint_combo.currentIndexChanged.connect(self._sync_angle_inputs)
-        angle_layout.addWidget(self.joint_combo)
+        # 選択関節表示ラベル（3Dビューでのクリック選択と連動）
+        joint_info_layout = QHBoxLayout()
+        joint_info_layout.addWidget(QLabel("選択中関節:"))
+        self.joint_label = QLabel("hips (index: 0)")
+        self.joint_label.setStyleSheet("font-weight: bold; color: #1a73e8;")
+        joint_info_layout.addWidget(self.joint_label)
+        joint_info_layout.addStretch()
+        angle_layout.addLayout(joint_info_layout)
 
         values_layout = QHBoxLayout()
         self.angle_spinboxes: list[QDoubleSpinBox] = []
-        self.angle_sliders: list[QSlider] = []  # スライダーのリストを追加
+        self.angle_sliders: list[QSlider] = []
         axis_names = ("Roll (deg):", "Pitch (deg):", "Yaw (deg):")
         
         for axis_name in axis_names:
@@ -169,7 +188,7 @@ class MotionTestSystem(QMainWindow):
             
             # スライダーの設定
             slider = QSlider(Qt.Orientation.Horizontal)
-            slider.setRange(-180, 180)  # 角度可動域 (-180° 〜 180°)
+            slider.setRange(-180, 180)
             slider.setValue(0)
             self.angle_sliders.append(slider)
             axis_layout.addWidget(slider)
@@ -186,7 +205,11 @@ class MotionTestSystem(QMainWindow):
             slider.valueChanged.connect(lambda v, sb=spinbox: sb.setValue(v))
             spinbox.valueChanged.connect(lambda v, sl=slider: sl.setValue(int(v)))
 
-            # ★ 追加：値が変わるたびにエンコード＆姿勢更新（ログ出力はスキップ） ★
+            # スライダー操作開始・終了シグナル
+            slider.sliderPressed.connect(self._on_slider_pressed)
+            slider.sliderReleased.connect(self._on_slider_released)
+
+            # スライダー/スピンボックスの値変化でリアルタイムにエンコード＆姿勢更新
             spinbox.valueChanged.connect(lambda _: self.encode_from_angles(log_output=False))
 
             values_layout.addLayout(axis_layout)
@@ -194,27 +217,26 @@ class MotionTestSystem(QMainWindow):
         angle_layout.addLayout(values_layout)
 
         encode_button = QPushButton("角度更新してエンコード実行")
-        # ★ 変更：ボタン押下時はログを出力する
         encode_button.clicked.connect(lambda: self.encode_from_angles(log_output=True))
         angle_layout.addWidget(encode_button)
 
-        reset_button = QPushButton("姿勢を初期状態(Tポーズ)にリセット")
-        reset_button.clicked.connect(self.reset_pose)
-        angle_layout.addWidget(reset_button)
+        save_gt_button = QPushButton("テスト用正解データとして保存")
+        save_gt_button.clicked.connect(self.save_ground_truth_data)
+        angle_layout.addWidget(save_gt_button)
 
-        angle_group.setLayout(angle_layout)
-        control_layout.addWidget(angle_group)
+        self.angle_group.setLayout(angle_layout)
+        control_layout.addWidget(self.angle_group)
 
-        # 4. 動作言語から座標へデコード
-        language_group = QGroupBox("4. 動作言語から座標へデコード")
+        # 動作言語から座標へデコード
+        language_group = QGroupBox("動作言語から座標へデコード")
         language_layout = QVBoxLayout()
         self.language_input = QTextEdit()
         self.language_input.setPlaceholderText("例: <A0B4C6...>")
         self.language_input.setFixedHeight(90)
         language_layout.addWidget(self.language_input)
-        decode_button = QPushButton("デコード実行と姿勢更新")
-        decode_button.clicked.connect(self.decode_from_language)
-        language_layout.addWidget(decode_button)
+        self.decode_button = QPushButton("デコード実行と姿勢更新")
+        self.decode_button.clicked.connect(self.decode_from_language)
+        language_layout.addWidget(self.decode_button)
         language_group.setLayout(language_layout)
         control_layout.addWidget(language_group)
 
@@ -222,13 +244,22 @@ class MotionTestSystem(QMainWindow):
 
         views_layout = QHBoxLayout()
         keypoint_view_layout = QVBoxLayout()
-        keypoint_view_layout.addWidget(QLabel("17関節（入力JSON）"))
+        keypoint_view_layout.addWidget(QLabel("17関節（入力）"))
         self.keypoint_plotter = QtInteractor(self)
         keypoint_view_layout.addWidget(self.keypoint_plotter.interactor)
         views_layout.addLayout(keypoint_view_layout)
 
         joint_view_layout = QVBoxLayout()
-        joint_view_layout.addWidget(QLabel("15関節（関節角度から再構成）"))
+        joint_view_header = QHBoxLayout()
+        joint_view_header.addWidget(QLabel("15関節（再構成）"))
+        joint_view_header.addStretch()
+        reset_pose_button = QPushButton("初期状態(Tポーズ)にリセット")
+        reset_pose_button.clicked.connect(self.reset_pose)
+        joint_view_header.addWidget(reset_pose_button)
+        reset_camera_button = QPushButton("カメラ視点をリセット")
+        reset_camera_button.clicked.connect(self._reset_camera_views)
+        joint_view_header.addWidget(reset_camera_button)
+        joint_view_layout.addLayout(joint_view_header)
         self.plotter = QtInteractor(self)
         joint_view_layout.addWidget(self.plotter.interactor)
         views_layout.addLayout(joint_view_layout)
@@ -241,14 +272,14 @@ class MotionTestSystem(QMainWindow):
         self.keypoint_meshes = []
         self.keypoint_bone_meshes = []
 
-        left_indices = {3, 4, 5, 9, 10, 11}
-        right_indices = {6, 7, 8, 12, 13, 14}
+        self.left_indices = {3, 4, 5, 9, 10, 11}
+        self.right_indices = {6, 7, 8, 12, 13, 14}
         
         # 15関節の球体メッシュおよび軸矢印
         for index in range(len(m_config.JOINT_NAMES)):
-            color = "red" if index in left_indices else "blue" if index in right_indices else "green"
+            color = "red" if index in self.left_indices else "blue" if index in self.right_indices else "green"
             self.joint_meshes.append(
-                self.plotter.add_mesh(pv.Sphere(radius=0.025), color=color)
+                self.plotter.add_mesh(pv.Sphere(radius=0.03), color=color, pickable=True)
             )
             
             for axis_index, color in self._local_axis_specs(index):
@@ -262,8 +293,21 @@ class MotionTestSystem(QMainWindow):
                         shaft_radius=0.025,
                     ),
                     color=color,
+                    pickable=False,
                 )
                 self.axis_actors.append((index, axis_index, actor))
+
+        # 3Dビュー上での関節ピッキング（クリックによる選択）を有効化
+        self.plotter.enable_mesh_picking(
+            callback=self._on_joint_picked,
+            left_clicking=True,
+            use_actor=True,
+            show=False,
+            show_message=False,
+            style=None,
+        )
+        if hasattr(self.plotter, "picker") and hasattr(self.plotter.picker, "SetTolerance"):
+            self.plotter.picker.SetTolerance(0.035)
 
         # 骨（円柱）の生成
         self.bones_indices = [
@@ -281,6 +325,7 @@ class MotionTestSystem(QMainWindow):
                         height=1.0,
                     ),
                     color="gray",
+                    pickable=False,
                 )
             )
 
@@ -307,7 +352,6 @@ class MotionTestSystem(QMainWindow):
                 )
             )
         self._set_keypoint_visibility(False)
-
         for plotter in (self.plotter, self.keypoint_plotter):
             plotter.show_bounds(
             bounds=(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0),
@@ -321,9 +365,15 @@ class MotionTestSystem(QMainWindow):
             color="black",
             )
             plotter.add_axes(line_width=2)
-            plotter.view_xy()
-            plotter.camera.position = (0.0, 0.0, -1.0)
-            plotter.camera.up = (0, -1, 0)
+        self._reset_camera_views()
+
+    def _reset_camera_views(self) -> None:
+        """Reset both 3D views to the front-facing initial camera."""
+        for plotter in (self.plotter, self.keypoint_plotter):
+            plotter.camera.position = INITIAL_CAMERA_POSITION
+            plotter.camera.focal_point = INITIAL_CAMERA_FOCAL_POINT
+            plotter.camera.up = INITIAL_CAMERA_UP
+            plotter.render()
 
     def toggle_axes_visibility(self, state: int) -> None:
         """ローカル座標軸の表示/非表示を切り替え"""
@@ -348,6 +398,105 @@ class MotionTestSystem(QMainWindow):
         name = m_config.JOINT_NAMES[index]
         return tuple((axis, colors[axis]) for axis in axis_map.get(name, ()))
 
+    def _on_joint_picked(self, actor) -> None:
+        """3Dビュー上で関節がクリックされた時のコールバック"""
+        if actor is None:
+            return
+        target_index = None
+        for idx, joint_actor in enumerate(self.joint_meshes):
+            underlying = joint_actor[0] if isinstance(joint_actor, tuple) else joint_actor
+            picked = actor[0] if isinstance(actor, tuple) else actor
+            if underlying == picked:
+                target_index = idx
+                break
+
+        if target_index is not None:
+            self._select_joint(target_index)
+
+    def _select_joint(self, index: int) -> None:
+        """指定された関節を選択し、UIとハイライト表示を更新"""
+        self.selected_joint_index = index
+        joint_name = m_config.JOINT_NAMES[index]
+        self.joint_label.setText(f"{joint_name} (index: {index})")
+
+        # 関節の球体ハイライト表示を更新（選択関節を黄色、その他を通常色に）
+        for idx, joint_actor in enumerate(self.joint_meshes):
+            act = joint_actor[0] if isinstance(joint_actor, tuple) else joint_actor
+            if hasattr(act, "GetProperty"):
+                prop = act.GetProperty()
+                if idx == index:
+                    prop.SetColor(1.0, 1.0, 0.0)  # 選択された関節: 黄色
+                else:
+                    if idx in self.left_indices:
+                        prop.SetColor(1.0, 0.0, 0.0)  # 左: 赤
+                    elif idx in self.right_indices:
+                        prop.SetColor(0.0, 0.0, 1.0)  # 右: 青
+                    else:
+                        prop.SetColor(0.0, 1.0, 0.0)  # 中央: 緑
+        self.plotter.render()
+
+        # スライダーとスピンボックスを選択関節の値に同期
+        self._sync_angle_inputs(index)
+
+    def load_coordinate_file(self) -> None:
+        """17点座標ファイル (.npy または .json) を読み込む"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "17点座標ファイルを選択", str(Path.cwd()),
+            "Coordinate files (*.npy *.json);;NumPy files (*.npy);;JSON files (*.json);;All files (*)",
+        )
+        if not file_path:
+            return
+        path = Path(file_path)
+        try:
+            if path.suffix.lower() == ".npy":
+                data = np.load(file_path)
+                # 形状判定: (17, 3) または (F, 17, 3)
+                if data.ndim == 2 and data.shape == (17, 3):
+                    keypoints_seq = data[np.newaxis, ...]
+                elif data.ndim == 3 and data.shape[1:] == (17, 3):
+                    keypoints_seq = data
+                else:
+                    raise ValueError(f"不正な.npy形状です: {data.shape} (期待: (17, 3) または (Frames, 17, 3))")
+                
+                self.sequence_keypoints = keypoints_seq
+                self.sequence_angles = calc_angles.calculate_joint_angles(self.sequence_keypoints)
+                self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
+                motion_angles = m_lang.to_motion_angles(self.sequence_angles)
+                self.sequence_tokens = self.encoder.encode(motion_angles)
+                self.manual_angles = motion_angles[0:1].copy()
+                self.input_mode = "keypoints"
+                self.file_label.setText(path.name)
+                self._select_joint(self.selected_joint_index)
+                self._set_frame(0)
+                self.log_message(
+                    f"座標.npy読み込み完了: {path.name}\n"
+                    f"フレーム数: {len(self.sequence_keypoints)}\n"
+                    f"角度形状: {self.sequence_angles.shape}\n"
+                    f"座標形状: {self.sequence_coords.shape}"
+                )
+            elif path.suffix.lower() == ".json":
+                pose_name, scale, keypoints = load_keypoints_json(file_path)
+                self.sequence_keypoints = keypoints[np.newaxis, ...]
+                self.sequence_angles = calc_angles.calculate_joint_angles(self.sequence_keypoints)
+                self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
+                motion_angles = m_lang.to_motion_angles(self.sequence_angles)
+                self.sequence_tokens = self.encoder.encode(motion_angles)
+                self.manual_angles = motion_angles[0:1].copy()
+                self.input_mode = "keypoints"
+                self.file_label.setText(path.name)
+                self._select_joint(self.selected_joint_index)
+                self._set_frame(0)
+                self.log_message(
+                    f"座標JSON読み込み完了: {pose_name}\n"
+                    f"scale: {scale:g}\n"
+                    f"角度形状: {self.sequence_angles.shape}\n"
+                    f"座標形状: {self.sequence_keypoints.shape}"
+                )
+            else:
+                raise ValueError(f"対応していないファイル形式です: {path.suffix}")
+        except (OSError, ValueError) as error:
+            self.log_message(f"座標ファイル読み込みエラー: {error}")
+
     def load_motion_file(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
             self, "動作言語ファイルを選択", str(Path.cwd()),
@@ -369,7 +518,7 @@ class MotionTestSystem(QMainWindow):
                 self.sequence_keypoints = keypoints[np.newaxis, ...]
             self.input_mode = "angles"
             self.manual_angles = motion_angles[0:1].copy()
-            self._sync_angle_inputs(self.joint_combo.currentIndex())
+            self._select_joint(self.selected_joint_index)
             self.file_label.setText(path.name)
             self._set_frame(0)
             self.log_message(
@@ -398,7 +547,7 @@ class MotionTestSystem(QMainWindow):
             self.manual_angles = motion_angles[0:1].copy()
             self.input_mode = "keypoints"
             self.file_label.setText(Path(file_path).name)
-            self._sync_angle_inputs(self.joint_combo.currentIndex())
+            self._select_joint(self.selected_joint_index)
             self._set_frame(0)
             self.log_message(
                 f"座標JSON読み込み完了: {pose_name}\n"
@@ -421,7 +570,7 @@ class MotionTestSystem(QMainWindow):
             self.manual_angles = motion_angles[0:1].copy()
             self.input_mode = "keypoints"
             self.file_label.setText(path.name)
-            self._sync_angle_inputs(self.joint_combo.currentIndex())
+            self._select_joint(self.selected_joint_index)
             self._set_frame(0)
             if log_message:
                 self.log_message(
@@ -461,13 +610,46 @@ class MotionTestSystem(QMainWindow):
         for actor in (*self.joint_meshes, *self.bone_meshes):
             actor.visibility = visible
 
+    def _on_slider_pressed(self) -> None:
+        """スライダーのドラッグ操作開始時"""
+        if self._is_history_action:
+            return
+        if self._pre_edit_angles is None:
+            self._pre_edit_angles = self.manual_angles.copy()
+        if self._edit_debounce_timer.isActive():
+            self._edit_debounce_timer.stop()
+
+    def _on_slider_released(self) -> None:
+        """スライダーのドラッグ操作終了時"""
+        if self._is_history_action:
+            return
+        self._commit_history_snapshot()
+
+    def _commit_history_snapshot(self) -> None:
+        """一連の姿勢編集操作を1つのUndoスナップショットとして確定"""
+        if self._is_history_action:
+            return
+        if self._pre_edit_angles is not None:
+            if not np.array_equal(self._pre_edit_angles, self.manual_angles):
+                self.history_stack.append(self._pre_edit_angles.copy())
+                if len(self.history_stack) > 50:
+                    self.history_stack.pop(0)
+                self.redo_stack.clear()
+            self._pre_edit_angles = None
+
     def encode_from_angles(self, log_output: bool = True) -> None:
         """指定された関節角度から動作言語へエンコードし、3D姿勢も同時に更新する"""
         # PyQtのシグナル(clicked等)から呼ばれた際の引数(checked: bool)を補正
         if not isinstance(log_output, bool):
             log_output = True
 
-        joint_index = self.joint_combo.currentIndex()
+        # 操作開始前の姿勢を記録し、操作終了判定タイマー（デバウンス）をリセット
+        if not self._is_history_action:
+            if self._pre_edit_angles is None:
+                self._pre_edit_angles = self.manual_angles.copy()
+            self._edit_debounce_timer.start()
+
+        joint_index = self.selected_joint_index
         self.manual_angles[0, joint_index] = [
             spinbox.value() for spinbox in self.angle_spinboxes
         ]
@@ -500,6 +682,65 @@ class MotionTestSystem(QMainWindow):
         """Reset to the posture represented by ``t_pose.json``."""
         self._load_pose_json(DEFAULT_POSE_PATH, log_message=False)
 
+    def save_ground_truth_data(self) -> None:
+        """現在の姿勢データをユニットテスト用の正解データ(JSONまたはNPZ)として保存"""
+        if self.sequence_coords is None or self.sequence_angles is None:
+            self.log_message("保存可能な姿勢データがありません")
+            return
+
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "テスト用正解データを保存",
+            str(Path.cwd() / "ground_truth.json"),
+            "JSON files (*.json);;NumPy Zip files (*.npz);;All files (*)",
+        )
+        if not file_path:
+            return
+
+        frame_idx = self.current_frame_idx
+        coords_15 = self.sequence_coords[frame_idx]
+        angles_15 = self.sequence_angles[frame_idx]
+        
+        # 現在の動作言語トークン
+        motion_angles = m_lang.to_motion_angles(angles_15[np.newaxis, ...])
+        tokens = self.encoder.encode(motion_angles)
+        token_str = tokens[0] if tokens else ""
+
+        path = Path(file_path)
+        try:
+            if path.suffix.lower() == ".npz":
+                save_dict = {
+                    "coords_15": coords_15,
+                    "angles_15": angles_15,
+                    "motion_token": np.array(token_str),
+                    "joint_names": np.array(m_config.JOINT_NAMES),
+                }
+                if self.sequence_keypoints is not None:
+                    kp_idx = min(frame_idx, len(self.sequence_keypoints) - 1)
+                    save_dict["keypoints_17"] = self.sequence_keypoints[kp_idx]
+                np.savez_compressed(path, **save_dict)
+            else:
+                data_dict = {
+                    "joint_names": m_config.JOINT_NAMES,
+                    "coords_15": coords_15.tolist(),
+                    "angles_15": angles_15.tolist(),
+                    "motion_token": token_str,
+                }
+                if self.sequence_keypoints is not None:
+                    kp_idx = min(frame_idx, len(self.sequence_keypoints) - 1)
+                    data_dict["keypoints_17"] = self.sequence_keypoints[kp_idx].tolist()
+
+                path.write_text(json.dumps(data_dict, indent=2, ensure_ascii=False), encoding="utf-8")
+
+            self.log_message(
+                f"正解データを保存しました: {path.name}\n"
+                f"15関節3D座標: shape {coords_15.shape}\n"
+                f"関節オイラー角: shape {angles_15.shape}\n"
+                f"動作言語トークン: {token_str}"
+            )
+        except Exception as error:
+            self.log_message(f"正解データの保存に失敗しました: {error}")
+
     def decode_from_language(self) -> None:
         token_text = self.language_input.toPlainText().strip()
         if not token_text:
@@ -515,7 +756,7 @@ class MotionTestSystem(QMainWindow):
             # デコードされた1フレーム目の角度を手動角度入力用バッファにも反映
             if len(self.sequence_angles) > 0:
                 self.manual_angles = motion_angles[0:1].copy()
-                self._sync_angle_inputs(self.joint_combo.currentIndex())
+                self._sync_angle_inputs(self.selected_joint_index)
 
             self.file_label.setText("手動入力")
             self._set_frame(0)
@@ -587,11 +828,13 @@ class MotionTestSystem(QMainWindow):
     def next_frame(self) -> None:
         if self.sequence_coords is None:
             self.timer.stop()
+            self._set_manual_controls_enabled(True)
             self.play_button.setText("▶ 再生")
             self.log_message("再生するシーケンスがありません")
             return
         if self.current_frame_idx >= len(self.sequence_coords) - 1:
             self.timer.stop()
+            self._set_manual_controls_enabled(True)
             self.play_button.setText("▶ 再生")
             return
         self._set_frame(self.current_frame_idx + 1)
@@ -600,18 +843,65 @@ class MotionTestSystem(QMainWindow):
         if self.sequence_coords is not None:
             self._set_frame(self.current_frame_idx - 1)
 
+    def undo_state(self) -> None:
+        """1つ前の姿勢状態に戻る（Undo）"""
+        if self._edit_debounce_timer.isActive():
+            self._edit_debounce_timer.stop()
+            self._commit_history_snapshot()
+        if not self.history_stack:
+            return
+        self.redo_stack.append(self.manual_angles.copy())
+        prev_angles = self.history_stack.pop()
+        self._apply_angles_to_state(prev_angles)
+
+    def redo_state(self) -> None:
+        """戻した姿勢状態を進める（Redo）"""
+        if self._edit_debounce_timer.isActive():
+            self._edit_debounce_timer.stop()
+            self._commit_history_snapshot()
+        if not self.redo_stack:
+            return
+        self.history_stack.append(self.manual_angles.copy())
+        next_angles = self.redo_stack.pop()
+        self._apply_angles_to_state(next_angles)
+
+    def _apply_angles_to_state(self, angles: np.ndarray) -> None:
+        """指定した角度配列を現在のUIおよび3D姿勢に反映"""
+        self._is_history_action = True
+        try:
+            self.manual_angles = angles.copy()
+            self._sync_angle_inputs(self.selected_joint_index)
+            tokens = self.encoder.encode(self.manual_angles)
+            self.language_input.setPlainText("\n".join(tokens))
+            self.sequence_angles = m_lang.from_motion_angles(self.manual_angles)
+            self.sequence_coords = vis_motion.reconstruct_3d_positions(self.sequence_angles)
+            self.sequence_tokens = tokens
+            self.file_label.setText("手動角度入力")
+            self._set_frame(0)
+        finally:
+            self._is_history_action = False
+
+    def _set_manual_controls_enabled(self, enabled: bool) -> None:
+        """連続再生中の手動編集の排他制御（無効化/有効化）"""
+        if hasattr(self, "angle_group"):
+            self.angle_group.setEnabled(enabled)
+        if hasattr(self, "decode_button"):
+            self.decode_button.setEnabled(enabled)
+
     def toggle_playback(self) -> None:
         if self.sequence_coords is None:
             self.log_message("再生するシーケンスがありません")
             return
         if self.timer.isActive():
             self.timer.stop()
+            self._set_manual_controls_enabled(True)
             self.play_button.setText("▶ 再生")
             self.log_message("一時停止")
             return
         if self.current_frame_idx >= len(self.sequence_coords) - 1:
             self._set_frame(0)
         self._update_timer_interval()
+        self._set_manual_controls_enabled(False)
         self.timer.start()
         self.play_button.setText("■ 一時停止")
         self.log_message(f"再生開始: {int(self.speed_spin.value())} ms/frame")

@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 from pose_estimation import calculate_joint_angles as calc_angles
 from pose_estimation import motion_language as m_lang
-from pose_estimation import visualize_motion as vis_motion
+from gui import visualize_motion as vis_motion
 from pose_estimation import motion_config as m_config
 
 

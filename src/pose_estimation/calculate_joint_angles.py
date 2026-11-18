@@ -6,9 +6,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 try:
-    from .motion_config import JOINT_NAMES, PARENTS
+    from .motion_config import JOINT_ANGLE_SIGNS, JOINT_NAMES, PARENTS, T_POSE_OFFSETS
 except ImportError:
-    from motion_config import JOINT_NAMES, PARENTS
+    from motion_config import JOINT_ANGLE_SIGNS, JOINT_NAMES, PARENTS, T_POSE_OFFSETS
 
 
 COCO_INDEX = {
@@ -125,7 +125,31 @@ def _joint_frames(points: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
             frames[f"{side}_elbow"] = elbow_frame
             frames[f"{side}_wrist"] = elbow_frame
             continue
-        if joint in ("L_elbow", "L_wrist", "R_elbow", "R_wrist"):
+        if joint in ("L_hip", "R_hip"):
+            side = "L" if joint.startswith("L_") else "R"
+            knee = points[f"{side}_knee"]
+            ankle = points[f"{side}_ankle"]
+            thigh = knee - points[joint]
+            calf = ankle - knee
+            hip_frame = _build_leg_hip_frame(
+                thigh,
+                calf,
+                body_lateral,
+                joint,
+            )
+            knee_frame, _ = _build_hinge_child_frame(
+                hip_frame,
+                calf,
+                joint,
+            )
+            frames[joint] = hip_frame
+            frames[f"{side}_knee"] = knee_frame
+            frames[f"{side}_ankle"] = knee_frame
+            continue
+        if joint in (
+            "L_elbow", "L_wrist", "R_elbow", "R_wrist",
+            "L_knee", "L_ankle", "R_knee", "R_ankle",
+        ):
             continue
         frames[joint] = _build_frame(y_vec, body_lateral, "leg", joint)
 
@@ -164,12 +188,44 @@ def _build_arm_elbow_frame(
     label: str,
 ) -> tuple[np.ndarray, float]:
     """Build the elbow frame using only an X-axis hinge rotation."""
-    forearm_axis = _unit(forearm, f"{label} forearm Y")
-    y_axis = shoulder_frame[:, 1]
-    z_axis = shoulder_frame[:, 2]
-    angle = float(np.arctan2(np.dot(forearm_axis, z_axis), np.dot(forearm_axis, y_axis)))
+    return _build_hinge_child_frame(shoulder_frame, forearm, label)
+
+
+def _build_leg_hip_frame(
+    thigh: np.ndarray,
+    calf: np.ndarray,
+    body_lateral: np.ndarray,
+    label: str,
+) -> np.ndarray:
+    """Build a hip frame whose X axis is the knee hinge axis."""
+    y_axis = _unit(thigh, f"{label} thigh Y")
+    reference_x = body_lateral - np.dot(body_lateral, y_axis) * y_axis
+    reference_x = _unit(reference_x, f"{label} hip X reference")
+
+    hinge_x = np.cross(thigh, calf)
+    if np.linalg.norm(hinge_x) <= np.finfo(float).eps * 10.0:
+        x_axis = reference_x
+    else:
+        x_axis = _unit(hinge_x, f"{label} knee hinge X")
+        if np.dot(x_axis, reference_x) < 0.0:
+            x_axis = -x_axis
+
+    z_axis = _unit(np.cross(x_axis, y_axis), f"{label} hip Z")
+    return np.column_stack((x_axis, y_axis, z_axis))
+
+
+def _build_hinge_child_frame(
+    parent_frame: np.ndarray,
+    child_segment: np.ndarray,
+    label: str,
+) -> tuple[np.ndarray, float]:
+    """Build a child frame from a parent Y/Z plane using only X-axis rotation."""
+    child_axis = _unit(child_segment, f"{label} child Y")
+    y_axis = parent_frame[:, 1]
+    z_axis = parent_frame[:, 2]
+    angle = float(np.arctan2(np.dot(child_axis, z_axis), np.dot(child_axis, y_axis)))
     rotation = Rotation.from_euler("x", angle).as_matrix()
-    return shoulder_frame @ rotation, angle
+    return parent_frame @ rotation, angle
 
 
 def calculate_joint_angles(keypoints_3d: np.ndarray) -> np.ndarray:
@@ -193,7 +249,12 @@ def calculate_joint_angles(keypoints_3d: np.ndarray) -> np.ndarray:
                 if parent is None
                 else frames[parent].T @ frames[joint]
             )
-            angles[frame_index, joint_index] = Rotation.from_matrix(relative).as_euler("zxy", degrees=True)
+            joint_angles = Rotation.from_matrix(relative).as_euler("zxy", degrees=True)
+            if joint in JOINT_ANGLE_SIGNS:
+                offsets = np.asarray(T_POSE_OFFSETS[joint_index], dtype=float)
+                relative = (joint_angles - offsets + 180.0) % 360.0 - 180.0
+                joint_angles = relative * JOINT_ANGLE_SIGNS[joint] + offsets
+            angles[frame_index, joint_index] = joint_angles
     return angles
 
 

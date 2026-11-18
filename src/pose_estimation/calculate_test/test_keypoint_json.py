@@ -3,7 +3,7 @@ import pytest
 from pathlib import Path
 
 from pose_estimation.calculate_joint_angles import COCO_INDEX
-from pose_estimation.keypoint_json import load_keypoints_json, parse_keypoints_json
+from gui.keypoint_json import load_keypoints_json, parse_keypoints_json
 
 
 def _keypoints():
@@ -45,8 +45,8 @@ def test_parse_keypoints_json_rejects_invalid_coordinate():
 def test_load_camera_keypoints_json():
     path = (
         Path(__file__).resolve().parents[3]
-        / "data_logs"
-        / "keypoints"
+        / "data"
+        / "posture"
         / "t_pose-real.json"
     )
     pose_name, scale, points = load_keypoints_json(path)

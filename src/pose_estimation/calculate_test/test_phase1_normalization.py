@@ -30,7 +30,7 @@ from pose_estimation.calculate_joint_angles import (
     calculate_joint_angles,
 )
 from pose_estimation.motion_config import JOINT_INDEX, JOINT_NAMES
-from pose_estimation.visualize_motion import reconstruct_3d_positions
+from gui.visualize_motion import reconstruct_3d_positions
 
 from pose_estimation.calculate_test.conftest import (
     make_tpose_coco,

@@ -21,6 +21,8 @@ from pose_estimation.calculate_joint_angles import (
     _named_points,
     calculate_joint_angles,
 )
+from pose_estimation.motion_language import to_motion_angles
+from gui.keypoint_json import load_keypoints_json
 from pose_estimation.motion_config import JOINT_INDEX, JOINT_NAMES, PARENTS
 
 
@@ -155,6 +157,29 @@ class TestBoneDirectionCosineSimilarity:
             err_msg=f"hips の Y軸と腰から首方向のコサイン類似度が 1.0 ではありません (sim={cosine_sim:.6f})",
         )
 
+    def test_flexion_axes_are_normal_to_bone_planes(self):
+        """実データの肘・膝の屈曲軸が各ボーン平面に垂直であることを確認する。"""
+        _, _, keypoints = load_keypoints_json("data/posture/squat.json")
+        frames = _joint_frames(_named_points(keypoints))
+        points = _named_points(keypoints)
+
+        for joint, parent, child in (
+            ("L_elbow", "L_shoulder", "L_wrist"),
+            ("R_elbow", "R_shoulder", "R_wrist"),
+            ("L_knee", "L_hip", "L_ankle"),
+            ("R_knee", "R_hip", "R_ankle"),
+        ):
+            incoming = points[parent] - points[joint]
+            outgoing = points[child] - points[joint]
+            expected = np.cross(incoming, outgoing)
+            expected /= np.linalg.norm(expected)
+
+            np.testing.assert_allclose(
+                abs(float(np.dot(frames[joint][:, 0], expected))),
+                1.0,
+                atol=1e-10,
+            )
+
 
 # ---------------------------------------------------------------------------
 # 3. 回転行列からオイラー角への変換検証
@@ -162,6 +187,44 @@ class TestBoneDirectionCosineSimilarity:
 
 class TestEulerAngleConversion:
     """回転行列から Z-X-Y オイラー角への変換正確性の検証。"""
+
+    def test_mirrored_elbows_use_the_same_pitch_convention(self, tpose_coco):
+        """正面向きの左右対称な肘曲げで、左右のPitch符号が一致することを確認する。"""
+        mirrored = tpose_coco.copy()
+        mirrored[7] = np.array([-0.35, 0.35, -0.15])
+        mirrored[9] = np.array([-0.20, 0.20, -0.30])
+        mirrored[8] = np.array([0.35, 0.35, -0.15])
+        mirrored[10] = np.array([0.20, 0.20, -0.30])
+
+        angles = calculate_joint_angles(mirrored[np.newaxis, ...])[0]
+        left_pitch = angles[JOINT_INDEX["L_elbow"], 1]
+        right_pitch = angles[JOINT_INDEX["R_elbow"], 1]
+
+        np.testing.assert_allclose(
+            right_pitch,
+            left_pitch,
+            atol=1e-10,
+            err_msg="左右対称な肘曲げで右肘Pitchの符号規約が左肘と一致していません。",
+        )
+
+    def test_mirrored_shoulders_use_the_same_pitch_and_yaw_convention(self, tpose_coco):
+        """左右対称な腕の姿勢で、肩のPitch/Yawが同じ解剖学的符号になることを確認する。"""
+        mirrored = tpose_coco.copy()
+        mirrored[7] = np.array([-0.35, 0.35, 0.15])
+        mirrored[9] = np.array([-0.20, 0.20, 0.25])
+        mirrored[8] = mirrored[7] * np.array([-1.0, 1.0, 1.0])
+        mirrored[10] = mirrored[9] * np.array([-1.0, 1.0, 1.0])
+
+        angles = to_motion_angles(calculate_joint_angles(mirrored[np.newaxis, ...]))[0]
+        left = angles[JOINT_INDEX["L_shoulder"]]
+        right = angles[JOINT_INDEX["R_shoulder"]]
+
+        np.testing.assert_allclose(
+            right[1:],
+            left[1:],
+            atol=1e-10,
+            err_msg="左右対称な腕姿勢で右肩のPitch/Yaw符号規約が左肩と一致していません。",
+        )
 
     def test_tpose_flexion_joint_angles_are_zero(self, tpose_coco):
         """

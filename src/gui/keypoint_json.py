@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from .calculate_joint_angles import COCO_INDEX
+from pose_estimation.calculate_joint_angles import COCO_INDEX
 
 
 def load_keypoints_json(path: str | Path) -> tuple[str, float, np.ndarray]:

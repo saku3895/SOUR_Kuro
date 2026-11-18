@@ -20,7 +20,13 @@ from pose_estimation.calculate_joint_angles import (
     _named_points,
     calculate_joint_angles,
 )
-from pose_estimation.motion_config import JOINT_INDEX, JOINT_NAMES, PARENTS
+from pose_estimation.motion_config import (
+    JOINT_ANGLE_SIGNS,
+    JOINT_INDEX,
+    JOINT_NAMES,
+    PARENTS,
+    T_POSE_OFFSETS,
+)
 from pose_estimation.calculate_test.conftest import pa_mpjpe, make_tpose_coco
 from pose_estimation.calculate_joint_angles import _CAMERA_NEUTRAL_ROTATION
 
@@ -76,10 +82,14 @@ def forward_kinematics(
         raise ValueError(f"angles_deg must have shape ({len(JOINT_NAMES)}, 3)")
 
     # 1. 各関節の相対回転行列を Z-X-Y 順序で復元
-    rel_rot = [
-        Rotation.from_euler("zxy", angles_deg[i], degrees=True).as_matrix()
-        for i in range(len(JOINT_NAMES))
-    ]
+    rel_rot = []
+    for i, joint in enumerate(JOINT_NAMES):
+        physical_angles = angles_deg[i].copy()
+        if joint in JOINT_ANGLE_SIGNS:
+            offsets = np.asarray(T_POSE_OFFSETS[i], dtype=float)
+            relative = (physical_angles - offsets + 180.0) % 360.0 - 180.0
+            physical_angles = relative * JOINT_ANGLE_SIGNS[joint] + offsets
+        rel_rot.append(Rotation.from_euler("zxy", physical_angles, degrees=True).as_matrix())
 
     # 2. 親から累積してグローバル回転行列（局所座標系の向き）を算出
     global_frames: dict[str, np.ndarray] = {}
